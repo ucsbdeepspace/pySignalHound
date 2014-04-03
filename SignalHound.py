@@ -966,7 +966,7 @@ class SignalHound():
 		else:
 			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
 
-	def fetchAudio(self, *audio):
+	def fetchAudio(self):
 		# BB_API bbStatus bbFetchAudio(int device, float *audio);
 
 		# device  Handle of an initialized device.
@@ -997,10 +997,56 @@ class SignalHound():
 		else:
 			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
 
-		return np.array(audioArr)
+		arr = np.ctypeslib.as_array(audioArr)  # Map numpy array onto the same memory location as audioArr
+
+		#Note: Copy is *probably* not needed, as the memory location is owned by the python code, rather then the SignalHound API.
+		return arr.copy()  # Copy, and return location.
 
 	def fetchRawCorrections(self):
 		# BB_API bbStatus bbFetchRawCorrections(int device, float *corrections, int *index, double *startFreq);
+
+		# device        Handle of an initialized device.
+		# corrections   32-bit float array of length 2048. Correction values are decibel.
+		# index         Index into the corrections array where the correction data begins.
+		# startFreq      Frequency associated with the correction at index.
+
+
+		# When this function returns successfully, the correction array will contain the frequency domain
+		# correction constants for the given bandwidth chosen. The corrections are modified based on
+		# temperature, gain, attenuation, and frequency. If any of these change, a new correction array should be
+		# requested. The correction array will only be generated again on a new bbInitiate().
+		# The correction arrays and returned values differ slightly depending on the 7 or 20 MHz bandwidth
+		# chosen. Each one is described in depth below.
+
+		# The correction array represents 40 MHz of bandwidth where frequencies outside the requested 20 MHz
+		# are zeroed out. The first non-zero sample begins at corrections[index]. The frequency at this index is
+		# startFreq. The bin size of each index is implied through 40 MHz divided by the length of the array,
+		# (40.0e6 / 2048) = 19531.25 Hz. If an Fourier transform is applied on the IF data, the correction values
+		# will line up with the usable 20 MHz bandwdith.
+		# 7MHz
+		# The correction array represents 10 Mhz of bandwdith where the usable 7 MHz is centered and all values
+		# outside the usable 7 MHz is zeroed. The index returned is the first non zero sample in the array. The
+		# startFreq returned is the frequency of the first sample in the array, corrections[0]. Every other sample’s
+		# frequency can be determined with the bin size. The bin size for this array is (10.0e6 / 2048) = 4882.8125
+		# Hz. If a complex Fourier Transform is applied to the IQ data, the correction values will line up with the
+		# usable 7 MHz bandwidth.
+		# Tips
+		# Time domain corrections of the signal’s amplitude require two steps. First, an inverse Fourier Transform
+		# must be performed on the entire correction array (including zero’ed portions). This results in a 4096
+		# sample kernel. Second, the kernel is used in convolution with the time domain data. If a larger/smaller
+		# kernel is desired, interpolate/extrapolate the correction array while it is in the frequency domain to the
+		# desired length. Lengths which are powers of two are suggested.
+		# Frequency domain correction of the signal’s amplitude requires you to first transform the raw data into
+		# the frequency domain. Performing an Fourier transform on the incoming data will yeild a frequency
+		# domain array that will align with the correction array. You can index the Transform results using the
+		# index returned from this function if you wish or apply the whole array. Remember that the corrections
+		# are in dB. If larger Transform sizes are desired, you can interpolate the correction array to the desired
+		# size. (Be aware! This will change the index of the first non-zero correction, but the results of the FFT will
+		# still align the with usable 20 MHz)
+
+		arraySize = 4096
+		audioArr = (ct.c_float * arraySize)()
+		audioArrPtr = ct.pointer(audioArr)
 
 		pass
 
@@ -1434,11 +1480,14 @@ def go():
 	sh.getSerialNumber()
 	sh.getFirmwareVersion()
 	sh.getAPIVersion()
-	sh.initiate("raw-sweep-loop", 0)
+	# sh.initiate("raw-sweep-loop", 0)
+	sh.initiate("audio-demod", "demod-fm")
 	# print sh.queryTimestamp()
-	sh.startRawSweepLoop(testFunct)
+	# sh.startRawSweepLoop(testFunct)
 
 	try:
+		while 1:
+			print sh.fetchAudio()
 		time.sleep(50)
 	except KeyboardInterrupt:
 		pass
