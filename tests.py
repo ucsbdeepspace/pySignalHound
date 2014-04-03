@@ -142,7 +142,7 @@ def testSweeps(sh):
 	sh.configureCenterSpan(150e6, 100e6)
 	sh.configureLevel(10, "auto")
 	sh.configureGain(0)
-	sh.configureSweepCoupling(9.863e3, 9.863e3, 10, "native", "no-spur-reject")
+	sh.configureSweepCoupling(9.863e3, 9.863e3, 0.010, "native", "no-spur-reject")
 	sh.configureWindow("hamming")
 	sh.configureProcUnits("power")
 	sh.configureTrigger("none", "rising-edge", 0, 5)
@@ -177,11 +177,11 @@ def testSweeps(sh):
 
 				print "ioerror"
 
-			if loops % 100 == 0:
+			if loops % 20 == 0:
 				print loops
 				now = time.time()
 				delta = now-START_TIME
-				freq = 1 / (delta / 100)
+				freq = 1 / (delta / 20)
 				print "Elapsed Time = ", delta, "Frequency = ", freq
 				START_TIME = now
 			if len(DATA_LOG):
