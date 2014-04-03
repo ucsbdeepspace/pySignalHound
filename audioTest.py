@@ -16,9 +16,7 @@
 #
 
 import logSetup
-import logging
 
-import time
 
 # pylint: disable=R0913, R0912
 
@@ -26,11 +24,12 @@ import numpy as np
 import pyaudio
 import SignalHound
 
+FORMAT = pyaudio.paFloat32
+CHANNELS = 1
+RATE = 32000  # bbFetchAudio returns samples at 32 Khz
+
 def go():
 
-	FORMAT = pyaudio.paFloat32
-	CHANNELS = 1
-	RATE = 32000  # bbFetchAudio returns samples at 32 Khz
 
 	sOut = pyaudio.PyAudio()
 	stream = sOut.open(format = FORMAT, channels = 1, rate = RATE, output = True, frames_per_buffer = 4096)
@@ -48,7 +47,7 @@ def go():
 	sh.configureProcUnits("power")
 	sh.configureTrigger("none", "rising-edge", 0, 5)
 	sh.configureIO("dc", "int-ref-out", "out-logic-low")
-	sh.configureDemod("fm", 92.9e6, 160e3, 12e3, 20, 75)
+	sh.configureDemod("fm", 92.9 * 1e6, 160e3, 12e3, 20, 75)
 	# sh.getDeviceType()
 	# sh.getSerialNumber()
 	# sh.getFirmwareVersion()
@@ -60,9 +59,9 @@ def go():
 
 	try:
 		while 1:
-			audio = sh.fetchAudio()
+			audio = sh.fetchAudio()  # fetchAudio is blocking.
 			stream.write(audio.astype(np.float32).tostring())
-		time.sleep(50)
+
 	except KeyboardInterrupt:
 		pass
 	# sh.configureTimeGate(0,0,0)

@@ -271,7 +271,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbFrequencyRangeErr"]:
 			raise IOError("The calculated start or stop frequencies fall outside of the operational frequency range of the specified device.")
 		else:
-			raise IOError("Unknown error setting configureAcquisition! Error = %s" % err)
+			raise IOError("Unknown error setting configureCenterSpan! Error = %s" % err)
 
 
 	def configureLevel(self, ref, atten):
@@ -291,7 +291,10 @@ class SignalHound():
 		# attenuation is not automatic, a flat attenuation is set across the entire spectrum. A set attenuation may
 		# produce a non-flat noise floor.
 
-		if atten % 10 != 0:
+		if atten == "auto":
+			atten = -1
+
+		if atten % 10 != 0 and atten != -1:
 			raise ValueError("Attenuator value must be a multiple of 10. Passed value of %s" % atten)
 
 		self.log.info("Setting device reference level and attentuation.")
@@ -349,7 +352,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbInvalidGainErr"]:
 			raise IOError("The specified gain value is outside the range of possible gains. Valid values are 0-%d, or \"auto\"" % hf.BB60_MAX_GAIN)
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting configureGain! Error = %s" % err)
 
 		return
 
@@ -452,7 +455,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbInvalidParameterErr"]:
 			raise IOError("'rejection' value is not one of the accepted values.")
 		else:
-			raise IOError("Unknown error setting configureAcquisition! Error = %s" % err)
+			raise IOError("Unknown error setting configureSweepCoupling! Error = %s" % err)
 
 
 
@@ -495,7 +498,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbInvalidWindowErr"]:
 			raise IOError("The specified windowing function is unknown.")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting configureWindow! Error = %s" % err)
 
 
 
@@ -542,7 +545,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbInvalidVideoUnitsErr"]:
 			raise IOError("The video-processing units did not match any available setting.")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting configureProcUnits! Error = %s" % err)
 
 
 
@@ -618,7 +621,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbInvalidParameterErr"]:
 			raise IOError("A parameter specified is not valid.")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting configureTrigger! Error = %s" % err)
 
 
 	def configureTimeGate(self, delay, length, timeout):
@@ -649,7 +652,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbInvalidParameterErr"]:
 			raise IOError("A parameter specified is not valid.")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting configureTimeGate! Error = %s" % err)
 
 	def configureRawSweep(self, start, ppf, steps):
 		# BB_API bbStatus bbConfigureRawSweep(int device, int start, int ppf, int steps, int stepsize);
@@ -679,6 +682,9 @@ class SignalHound():
 			raise ValueError("The final center frequency, obtained by the equation (start + steps*20), cannot be greater than 6000 (6 GHz).")
 
 
+		self.ppf = ppf
+		self.steps = steps
+
 		start = ct.c_int(start)
 		ppf = ct.c_int(ppf)
 		steps = ct.c_int(steps)
@@ -687,13 +693,13 @@ class SignalHound():
 		err = self.dll.bbConfigureRawSweep(self.deviceHandle, start, ppf, steps, stepSize)
 
 		if err == self.bbStatus["bbNoError"]:
-			self.log.info("Call to configureTimeGate succeeded.")
+			self.log.info("Call to configureRawSweep succeeded.")
 		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
 			raise IOError("Device not open!")
 		elif err == self.bbStatus["bbInvalidParameterErr"]:
 			raise IOError("A parameter specified is not valid.")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting configureRawSweep! Error = %s" % err)
 
 	def configureIO(self, port1Coupling, port1mode, port2mode):
 		# BB_API bbStatus bbConfigureIO(int device, unsigned int port1, unsigned int port2);
@@ -782,7 +788,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbInvalidParameterErr"]:
 			raise IOError("A parameter supplied is unknown.")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting configureIO! Error = %s" % err)
 
 
 	def configureDemod(self, modulationType, freq, ifBw, audioLowPassFreq, audioHighPassFreq, fmDeemphasis):
@@ -845,7 +851,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
 			raise IOError("Device not open!")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting configureDemod! Error = %s" % err)
 
 	def initiate(self, mode, flag):
 		# BB_API bbStatus bbInitiate(int device, unsigned int mode, unsigned int flag);
@@ -899,7 +905,7 @@ class SignalHound():
 		err = self.dll.bbInitiate(self.deviceHandle, mode, flag)
 
 		if err == self.bbStatus["bbNoError"]:
-			self.log.info("Call to configureDemod succeeded.")
+			self.log.info("Call to initiate succeeded.")
 		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
 			raise IOError("Device not open!")
 		elif err == self.bbStatus["bbInvalidParameterErr"]:
@@ -917,9 +923,9 @@ class SignalHound():
 		elif err == self.bbStatus["bbBandwidthErr"]:
 			raise IOError("RBW is larger than your span. (Sweep Mode)!")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting initiate! Error = %s" % err)
 
-	def fetchTrace(self, arraySize):
+	def fetchTrace(self):
 		# BB_API bbStatus bbFetchTrace(int device, int arraySize, double *min, double *max);
 		# device  Handle of an initialized device.
 		# arraySize  A provided arraySize. This value must be equal to or greater than the
@@ -932,6 +938,12 @@ class SignalHound():
 		# Returns a minimum and maximum array of values relating to the current mode of operation. If the
 		# detectorType provided in bbConfigureAcquisition is BB_AVERAGE, the array will be populated with the
 		# same values. Element zero of each array corresponds to the startFreq returned from bbQueryTraceInfo.
+
+		try:
+			arraySize = self.traceLen
+		except AttributeError:
+			self.log.error("You must call queryTraceInfo atleast once before fetchTrace")
+			raise
 
 		maxArr = (ct.c_double * arraySize)()
 		minArr = (ct.c_double * arraySize)()
@@ -964,7 +976,18 @@ class SignalHound():
 		elif err == self.bbStatus["bbDeviceConnectionErr"]:
 			raise IOError("Device connection issues were present in the acquisition of this sweep!")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting fetchTrace! Error = %s" % err)
+
+
+		maxData = SignalHound.fastDecodeArray(maxArr, arraySize, np.double)
+		minData = SignalHound.fastDecodeArray(minArr, arraySize, np.double)
+
+		ret = {
+			"max" : maxData,
+			"min" : minData
+		}
+
+		return ret
 
 	def fetchAudio(self):
 		# BB_API bbStatus bbFetchAudio(int device, float *audio);
@@ -995,7 +1018,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbDeviceConnectionErr"]:
 			raise IOError("Device connection issues were present in the acquisition of this sweep!")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting fetchAudio! Error = %s" % err)
 
 		arr = np.ctypeslib.as_array(audioArr)  # Map numpy array onto the same memory location as audioArr
 
@@ -1044,26 +1067,210 @@ class SignalHound():
 		# size. (Be aware! This will change the index of the first non-zero correction, but the results of the FFT will
 		# still align the with usable 20 MHz)
 
-		arraySize = 4096
-		audioArr = (ct.c_float * arraySize)()
-		audioArrPtr = ct.pointer(audioArr)
+		arraySize = 2048
+		corrArr = (ct.c_float * arraySize)()
+		corrArrPtr = ct.pointer(corrArr)
 
-		pass
+		index = ct.c_int(0)
+		startFreq = ct.c_double(0)
+
+		indexPtr = ct.pointer(index)
+		startFreqPtr = ct.pointer(startFreq)
+
+		err = self.dll.bbFetchRawCorrections(self.deviceHandle, corrArrPtr, indexPtr, startFreqPtr)
+
+		if err == self.bbStatus["bbNoError"]:
+			self.log.info("Call to fetchRawCorrections succeeded.")
+		elif err == self.bbStatus["bbNullPtrErr"]:
+			raise IOError("Null pointer error!")
+		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
+			raise IOError("Device not open!")
+		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
+			raise IOError("Device not Configured!")
+		else:
+			raise IOError("Unknown error setting fetchRawCorrections! Error = %s" % err)
+
+		ret = {
+			"data" : np.ctypeslib.as_array(corrArr),
+			"index" : index.value,
+			"startFreq" : startFreq.value
+		}
+
+		return ret
 
 	def fetchRaw(self):
 		# BB_API bbStatus bbFetchRaw(int device, float *buffer, int *triggers);
 
-		pass
+		# device  Handle of a streaming device.
+		# buffer  A pointer to an array of length 299008. The contents of this buffer will
+		# 	be updated. The format of the data to be stored in buffer depends on
+		# 	the current mode of the device and which bbFetchRaw function is
+		# 	called.
+		# triggers  triggers is a pointer to an array of 68 integers representing external
+		# 	trigger information relative to the buffer. Read the description below
+		# 	for in-depth discussion.
+
+		# Fetch a chunk of data while the device is in the raw data pipe mode. A buffer will data represent either
+		# 299008/80,000,000 or 299008/20,000,000 seconds worth of time depending on the bandwidth selected
+		# at initiate. The structure of the data is described in Modes of Operation:Raw Data. To ensure full
+		# coverage the function must be called ~267 times with a 20 MHz bandwidth and ~67 with 7 MHz
+		# bandwidth. Only 120ms of data is buffered before data loss occurs. Ensure no additional processing or
+		# disk I/O is occuring in the same thread as the one acquiring the data to ensure no data loss.
+		# The values returned in buffer represent full scale. For 32-bit floating point samples, the values range
+		# from -1.0 to 1.0. For 16-bit signed short samples, the values range from -2 15 to 2 15 -1. Values at or near
+		# the absolute max might indicate compression. Adjusting gain and attenuation is the best way to achieve
+		# the most dynamic range of samples returned.
+		# The triggers parameter can be null(0) if you are not interested in trigger position, otherwise triggers
+		# should point to an array of 68 32-bit integers. Starting at triggers[0], positive values will indicate
+		# positions within the returned buffer array where an external trigger occurred. The positions are zero
+		# based, meaning the positions will be between 0 and 299007. (Note: the minimum trigger position
+		# detected is approximately 90) If no triggers occurred during the acquisition of the raw data, all values
+		# will be 0. If for example, 3 external triggers occurred during the acquisition, the first three values of the
+		# triggers array will be non-negative, and the remaining equal to 0. A returned trigger array might look like
+		# this.
+		# The filters used to downconvert the 20 MHz IF to 7 MHz IQ cause the data to incur a 3.3 micro second
+		# delay which is accounted for in the trigger index values.
+		# triggerArray[68] = [917, 46440, 196264, 0, 0, …, 0];
+		# This array indicates three external triggers were detected at buffer[917], buffer[46440], and
+		# buffer[196264]. They will always be in increasing order.
+		# Only the first 17 triggers will be registered every 1/267 th of a second.
+		# Note: The ports on a broadband device need to be configured to receive external triggers to take
+		# advantage of the trigger array.
+		# See the Code Examples for an example of this function.
+		# The values returned are in the time domain and are uncorrected. (See bbFetchRawCorrections() for
+		# information on making amplitude corrections on the raw data)
+
+
+
+		arraySize = 299008
+		rawBuf = (ct.c_float * arraySize)()
+		rawBufPtr = ct.pointer(rawBuf)
+
+		triggerArraySize = 68
+		triggers = (ct.c_int * triggerArraySize)(0)
+		triggersPtr = ct.pointer(triggers)
+
+		err = self.dll.bbFetchRaw(self.deviceHandle, rawBufPtr, triggersPtr)
+
+		if err == self.bbStatus["bbNoError"]:
+			pass  # No print statements here. Too noisy
+
+		elif err == self.bbStatus["bbNullPtrErr"]:
+			raise IOError("Null pointer error!")
+		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
+			raise IOError("Device not open!")
+		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
+			raise IOError("Device not Configured!")
+		elif err == self.bbStatus["bbADCOverflow"]:
+			raise IOError("The ADC has detected clipping of the input signal!")
+		elif err == self.bbStatus["bbPacketFramingErr"]:
+			raise IOError("Data loss or miscommunication has occurred between the device and the API!")
+		elif err == self.bbStatus["bbDeviceConnectionErr"]:
+			raise IOError("Device connection issues were present in the acquisition of this sweep!")
+		else:
+			raise IOError("Unknown error setting fetchRaw! Error = %s" % err)
+
+
+		data = SignalHound.fastDecodeArray(rawBuf, arraySize, np.short)
+		triggers = SignalHound.fastDecodeArray(triggers, triggerArraySizem, np.int)
+
+		ret = {
+			"data" : data,
+			"triggers" : triggers
+		}
+
+		return ret
 
 	def fetchRaw_s(self):
 		# BB_API bbStatus bbFetchRaw_s(int device, short *buffer, int *triggers);
 
-		pass
+		# This is functionally identical to fetchRaw, only it returns an array of shorts, rather then floats.
+
+
+		arraySize = 299008
+		rawBuf = (ct.c_short * arraySize)()
+		rawBufPtr = ct.pointer(rawBuf)
+
+		triggerArraySize = 68
+		triggers = (ct.c_int * triggerArraySize)(0)
+		triggersPtr = ct.pointer(triggers)
+
+		err = self.dll.bbFetchRaw(self.deviceHandle, rawBufPtr, triggersPtr)
+
+		if err == self.bbStatus["bbNoError"]:
+			pass  # No print statements here. Too noisy
+
+		elif err == self.bbStatus["bbNullPtrErr"]:
+			raise IOError("Null pointer error!")
+		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
+			raise IOError("Device not open!")
+		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
+			raise IOError("Device not Configured!")
+		elif err == self.bbStatus["bbADCOverflow"]:
+			raise IOError("The ADC has detected clipping of the input signal!")
+		elif err == self.bbStatus["bbPacketFramingErr"]:
+			raise IOError("Data loss or miscommunication has occurred between the device and the API!")
+		elif err == self.bbStatus["bbDeviceConnectionErr"]:
+			raise IOError("Device connection issues were present in the acquisition of this sweep!")
+		else:
+			raise IOError("Unknown error setting fetchRaw_s! Error = %s" % err)
+
+
+		data = SignalHound.fastDecodeArray(rawBuf, arraySize, np.short)
+		triggers = SignalHound.fastDecodeArray(triggers, triggerArraySizem, np.int)
+
+		ret = {
+			"data" : data,
+			"triggers" : triggers
+		}
+
+		return ret
 
 	def fetchRawSweep(self):
 		# BB_API bbStatus bbFetchRawSweep(int device, short *buffer);
 
-		pass
+		# device  Handle of an initialized device.
+		# buffer  Pointer to an array of signed short integers
+
+		# This function is used to collect a single sweep for a device configured in raw sweep mode. The length of
+		# the buffer provided is determined by the settings used to configure the device for raw sweep mode. This
+		# length can be determined using the equation.
+		# 		Buffer-Length = 18688 * ppf * steps
+		# If the function returns successfully the array will contain a full sweep. The shorts will
+
+		try:
+			bufLen = 18688 * self.ppf * self.steps
+		except AttributeError:
+			raise ValueError("You must call configureRawSweep before fetchRawSweep")
+
+
+		rawBuf = (ct.c_short * bufLen)()
+		rawBufPtr = ct.pointer(rawBuf)
+
+		err = self.dll.bbFetchRawSweep(self.deviceHandle, rawBufPtr)
+
+		if err == self.bbStatus["bbNoError"]:
+			pass  # No print statements here. Too noisy
+
+		elif err == self.bbStatus["bbNullPtrErr"]:
+			raise IOError("Null pointer error!")
+		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
+			raise IOError("Device not open!")
+		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
+			raise IOError("Device not Configured!")
+		elif err == self.bbStatus["bbADCOverflow"]:
+			raise IOError("The ADC has detected clipping of the input signal!")
+		elif err == self.bbStatus["bbPacketFramingErr"]:
+			raise IOError("Data loss or miscommunication has occurred between the device and the API!")
+		elif err == self.bbStatus["bbDeviceConnectionErr"]:
+			raise IOError("Device connection issues were present in the acquisition of this sweep!")
+		else:
+			raise IOError("Unknown error setting fetchRawSweep! Error = %s" % err)
+
+
+		data = SignalHound.fastDecodeArray(rawBuf, arraySize, np.short)
+
+		return data
 
 	def startRawSweepLoop(self, callbackFunc):
 		# BB_API bbStatus bbStartRawSweepLoop(int device, void(*sweep_callback)(short *buffer, int len));
@@ -1112,7 +1319,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
 			raise IOError("Device not Configured!")
 		else:
-			raise IOError("Unknown error!")
+			raise IOError("Unknown error in startRawSweepLoop!")
 
 
 	def queryTraceInfo(self):
@@ -1133,6 +1340,9 @@ class SignalHound():
 		# This function should be called to determine sweep characteristics after a device has been configured
 		# and initiated. For zero-span mode, startFreq and binSize will refer to the time domain values. In zero-
 		# span mode startFreq will always be zero, and binSize will be equal to sweepTime/traceSize.
+
+		# Note: Calling while in BB_RAW_PIPE mode will produce a bbDeviceNotConfiguredErr
+
 
 		self.log.info("Querying device for trace information.")
 
@@ -1155,9 +1365,11 @@ class SignalHound():
 		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
 			raise IOError("Device not open!")
 		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
-			raise IOError("Device not Configured!")
+			raise IOError("Device not Configured, or in \"raw-pipe\" mode!")
 		else:
-			raise IOError("Unknown error!")
+			raise IOError("Unknown error in queryTraceInfo!")
+
+		self.traceLen = traceLen.value
 
 		return (traceLen.value, binSize.value, start.value)
 
@@ -1188,7 +1400,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
 			raise IOError("Device not Configured!")
 		else:
-			raise IOError("Unknown error!")
+			raise IOError("Unknown error in queryStreamingCenter!")
 
 		return center.value
 
@@ -1225,7 +1437,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
 			raise IOError("Device not Configured!")
 		else:
-			raise IOError("Unknown error!")
+			raise IOError("Unknown error in queryTimestamp!")
 
 		return (seconds.value, nanoseconds.value)
 
@@ -1233,6 +1445,24 @@ class SignalHound():
 		# BB_API bbStatus bbAbort(int device);
 
 		# Stops the device operation and places the device into an idle state.
+
+
+		# cleanup state variables used in various modes.
+		try:
+			del(self.ppf)
+		except AttributeError:
+			pass
+
+		try:
+			del(self.steps)
+		except AttributeError:
+			pass
+
+		try:
+			del(self.steps)
+		except AttributeError:
+			pass
+
 
 		self.log.info("Stopping acquisition")
 
@@ -1243,9 +1473,9 @@ class SignalHound():
 		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
 			raise IOError("Device not open!")
 		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
-			raise IOError("Device was already idle!")
+			raise IOError("Device was already idle! Did you call abort without ever calling initiate()?")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting abort! Error = %s" % err)
 
 
 	def preset(self):
@@ -1273,7 +1503,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
 			raise IOError("Device not open!")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error calling preset! Error = %s" % err)
 
 	def selfCal(self):
 		# BB_API bbStatus bbSelfCal(int device);
@@ -1304,7 +1534,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
 			raise IOError("Device not open!")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error calling selfCal! Error = %s" % err)
 
 	def syncCPUtoGPS(self, comPort, baudRate):
 		# BB_API bbStatus bbSyncCPUtoGPS(int comPort, int baudRate);
@@ -1335,7 +1565,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbNullPtrErr"]:
 			raise IOError("Null pointer error!")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting getDeviceType! Error = %s" % err)
 
 		if devType.value == hf.BB_DEVICE_NONE:
 			dev = "No device"
@@ -1374,7 +1604,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbNullPtrErr"]:
 			raise IOError("Null pointer error!")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting getSerialNumber! Error = %s" % err)
 
 		return serialNo.value
 
@@ -1399,7 +1629,7 @@ class SignalHound():
 		elif err == self.bbStatus["bbNullPtrErr"]:
 			raise IOError("Null pointer error!")
 		else:
-			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+			raise IOError("Unknown error setting getFirmwareVersion! Error = %s" % err)
 
 		return firmwareRev.value
 
@@ -1440,64 +1670,20 @@ class SignalHound():
 		return ct.c_char_p(apiRevStr).value  # Dereference pointer, extract string, return it.
 
 
-START_TIME = time.time()
-dataLog = []
+	# staticmethod, because it's only usefull for dealing with the SignalHound stuff, and yet it should be accessible easily for stuff like callbacks where you don't have.
+	# easy access to the instantiated class pointer
+	@staticmethod
+	def decodeRawSweep(bufPtr, bufLen):
+		bufAdr = ct.addressof(bufPtr.contents)
+		arr = np.frombuffer(int_asbuffer(bufAdr, bufLen * np.short().nbytes), dtype=np.short)  # Map array memory as a numpy array.
+		arr = arr.copy()  # Then copy it, so our array won't get modified when the circular buffer overwrites itself.
+		# We have to copy() since the call normally just returns a array that is overlaid onto the pre-existing data
+		return arr
 
-def testFunct(bufPtr, bufLen):
-	global START_TIME  #hacking about for determining callback interval times. I shouldn't be using global, but fukkit.
-	global dataLog
-	now = time.time()
-
-	print "Callback!", bufPtr, bufLen
-	print bufPtr[0]
-	# HOLY UNPACKING ONE-LINER BATMAN
-	arr = np.frombuffer(int_asbuffer(ct.addressof(bufPtr.contents), bufLen * 2), dtype=np.short)  # Map array memory as a numpy array.
-	arr = arr.copy()  # Then copy it, so our array won't get modified when the circular buffer overwrites itself.
-	dataLog.append(arr)
-	# We have to copy() since the call normally just returns a array that is overlaid onto the pre-existing data
-
-	print "NP Array = ", arr.shape, arr
-	print "Elapsed Time = ", now-START_TIME
-	START_TIME = now
-
-def go():
-
-	logSetup.initLogging()
-	sh = SignalHound()
-	# sh.preset()
-	sh.queryDeviceDiagnostics()
-	sh.configureAcquisition("average", "log-scale")
-	sh.configureCenterSpan(150e6, 100e6)
-	sh.configureLevel(-50, 10)
-	sh.configureGain(0)
-	sh.configureSweepCoupling(9.863e3, 9.863e3, 10, "native", "no-spur-reject")
-	sh.configureWindow("hamming")
-	sh.configureProcUnits("power")
-	sh.configureTrigger("none", "rising-edge", 0, 5)
-	sh.configureIO("dc", "int-ref-out", "out-logic-low")
-	# sh.configureDemod("fm", 92.9e6, 250e3, 12e3, 20, 50)
-	sh.getDeviceType()
-	sh.getSerialNumber()
-	sh.getFirmwareVersion()
-	sh.getAPIVersion()
-	# sh.initiate("raw-sweep-loop", 0)
-	sh.initiate("audio-demod", "demod-fm")
-	# print sh.queryTimestamp()
-	# sh.startRawSweepLoop(testFunct)
-
-	try:
-		while 1:
-			print sh.fetchAudio()
-		time.sleep(50)
-	except KeyboardInterrupt:
-		pass
-	# sh.configureTimeGate(0,0,0)
-	# sh.configureRawSweep(500, 10, 16)
-
-	sh.abort()
-	sh.closeDevice()
-
-
-
-if __name__ == "__main__":
-	go()
+	@staticmethod
+	def fastDecodeArray(ctBuff, buffLen, dtype):
+		bufAdr = ct.addressof(ctBuff)
+		arr = np.frombuffer(int_asbuffer(bufAdr, buffLen * dtype().nbytes), dtype=dtype)  # Map array memory as a numpy array.
+		arr = arr.copy()  # Then copy it, so our array won't get modified when the circular buffer overwrites itself.
+		# We have to copy() since the call normally just returns a array that is overlaid onto the pre-existing data
+		return arr
