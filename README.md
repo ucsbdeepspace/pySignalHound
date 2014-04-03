@@ -8,8 +8,7 @@ The primary file is "SignalHound.py". It defines one class, "SignalHound()", tha
 
 Predominantly, all C API errors should be caught, and re-raised as python exceptions with helpful error messages.
 
-Also, there is *some* error checking for function parameters. I should probably go through and add {dll}.{function}.restype = {something} type
-hints to all the function calls, but I think the fact that I'm explicitly casting all parameters to ctypes values should somewhat ameliorate that need.
+Also, there is *some* error checking for function parameters. I should probably go through and add `{dll}.{function}.restype = {something}` type hints to all the function calls, but I think the fact that I'm explicitly casting all parameters to ctypes values should somewhat ameliorate that need.
 
 At the moment, the one function that takes a callback (`bbStartRawSweepLoop`) properly wraps a passed python function, so it gets called via the C callback,
 though it still relys on the user decoding the C function call arguments. I want to do something about that in the near future.
