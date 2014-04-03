@@ -16,11 +16,11 @@ though it still relys on the user decoding the C function call arguments. I want
 
 
 
-#  * ----------------------------------------------------------------------------
-#  * "THE BEER-WARE LICENSE":
-#  * Connor Wolf <wolf@imaginaryindustries.com> wrote this file. As long as you retain
-#  * this notice you can do whatever you want with this stuff. If we meet some day,
-#  * and you think this stuff is worth it, you can buy me a beer in return.
-#  * (Only I don't drink, so a soda will do). Connor
-#  * Also, support the Signal-Hound devs. Their hardware is pretty damn awesome.
-#  * ----------------------------------------------------------------------------
+* ----------------------------------------------------------------------------
+* "THE BEER-WARE LICENSE":
+* Connor Wolf <wolf@imaginaryindustries.com> wrote this file. As long as you retain
+* this notice you can do whatever you want with this stuff. If we meet some day,
+* and you think this stuff is worth it, you can buy me a beer in return.
+* (Only I don't drink, so a soda will do). Connor
+* Also, support the Signal-Hound devs. Their hardware is pretty damn awesome.
+* ----------------------------------------------------------------------------
