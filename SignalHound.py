@@ -592,12 +592,16 @@ class SignalHound():
 		else:
 			raise ValueError("Trigger type must be either \"none\", \"video\", \"external\" or \"gps-pps\". Passed value was %s." % trigType)
 
-		if edge == "rising-edge":
-			edge =  hf.BB_NO_TRIGGER
-		elif edge == "falling-edge":
-			edge = hf.BB_VIDEO_TRIGGER
+		if trigType == hf.BB_VIDEO_TRIGGER:
+			if edge == "rising-edge":
+				edge =  hf.BB_TRIGGER_RISING
+			elif edge == "falling-edge":
+				edge = hf.BB_TRIGGER_FALLING
+			else:
+				raise ValueError("Trigger type for vide-triggering must be either \"rising-edge\", \"falling-edge\". Passed value was %s." % edge)
 		else:
-			raise ValueError("Trigger edge must be either \"rising-edge\", \"falling-edge\". Passed value was %s." % edge)
+			# Trigger type is ignored in all modes except BB_VIDEO_TRIGGER
+			edge =  hf.BB_TRIGGER_FALLING
 
 
 		trigType = ct.c_uint(trigType)
@@ -965,7 +969,35 @@ class SignalHound():
 	def fetchAudio(self, *audio):
 		# BB_API bbStatus bbFetchAudio(int device, float *audio);
 
-		pass
+		# device  Handle of an initialized device.
+		# audio  Pointer to an array of 4096 32-bit floating point values
+
+		# If the device is initiated and running in the audio demodulation mode, the function is a blocking call
+		# which returns the next 4096 audio samples. The approximate blocking time for this function is 128 ms if
+		# called again immediately after returning. There is no internal buffering of audio, meaning the audio will
+		# be overwritten if this function is not called in a timely fashion. The audio values are typically -1.0 to 1.0,
+		# representing full-scale audio. In FM mode, the audio values will scale with a change in IF bandwidth.
+
+		arraySize = 4096
+		audioArr = (ct.c_float * arraySize)()
+		audioArrPtr = ct.pointer(audioArr)
+
+		err = self.dll.bbFetchAudio(self.deviceHandle, audioArrPtr)
+
+		if err == self.bbStatus["bbNoError"]:
+			self.log.info("Call to fetchTrace succeeded.")
+		elif err == self.bbStatus["bbNullPtrErr"]:
+			raise IOError("Null pointer error!")
+		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
+			raise IOError("Device not open!")
+		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
+			raise IOError("Device not Configured!")
+		elif err == self.bbStatus["bbDeviceConnectionErr"]:
+			raise IOError("Device connection issues were present in the acquisition of this sweep!")
+		else:
+			raise IOError("Unknown error setting configureLevel! Error = %s" % err)
+
+		return np.array(audioArr)
 
 	def fetchRawCorrections(self):
 		# BB_API bbStatus bbFetchRawCorrections(int device, float *corrections, int *index, double *startFreq);
@@ -1363,9 +1395,11 @@ class SignalHound():
 
 
 START_TIME = time.time()
+dataLog = []
 
 def testFunct(bufPtr, bufLen):
 	global START_TIME  #hacking about for determining callback interval times. I shouldn't be using global, but fukkit.
+	global dataLog
 	now = time.time()
 
 	print "Callback!", bufPtr, bufLen
@@ -1373,6 +1407,7 @@ def testFunct(bufPtr, bufLen):
 	# HOLY UNPACKING ONE-LINER BATMAN
 	arr = np.frombuffer(int_asbuffer(ct.addressof(bufPtr.contents), bufLen * 2), dtype=np.short)  # Map array memory as a numpy array.
 	arr = arr.copy()  # Then copy it, so our array won't get modified when the circular buffer overwrites itself.
+	dataLog.append(arr)
 	# We have to copy() since the call normally just returns a array that is overlaid onto the pre-existing data
 
 	print "NP Array = ", arr.shape, arr
