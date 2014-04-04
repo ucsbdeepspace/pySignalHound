@@ -18,15 +18,11 @@
 # pylint: disable=R0913, R0912
 
 import logSetup
-
+import sys
 import time
 import numpy as np
-import pyaudio
-from SignalHound import SignalHound
 
-FORMAT = pyaudio.paFloat32
-CHANNELS = 1
-RATE = 32000  # bbFetchAudio returns samples at 32 Khz
+from SignalHound import SignalHound
 
 START_TIME = time.time()
 DATA_LOG = []
@@ -65,6 +61,7 @@ def testCallback(sh):
 		pass
 
 
+	sh.abort()
 
 def testRawPipeMode(sh):
 	global START_TIME  #hacking about for determining callback interval times. I shouldn't be using global, but fukkit.
@@ -130,6 +127,7 @@ def testRawPipeMode(sh):
 		pass
 
 	out.close()
+	sh.abort()
 
 
 def testSweeps(sh):
@@ -147,7 +145,7 @@ def testSweeps(sh):
 	sh.configureProcUnits("power")
 	sh.configureTrigger("none", "rising-edge", 0, 5)
 	sh.configureIO("dc", "int-ref-out", "out-logic-low")
-	sh.configureDemod("fm", 92.9e6, 250e3, 12e3, 20, 50)
+	sh.configureDemod("fm", 102.3e6, 250e3, 12e3, 20, 50)
 
 	# sh.configureRawSweep(100, 8, 2)
 	sh.initiate("sweeping", "ignored")
@@ -201,6 +199,8 @@ def testSweeps(sh):
 
 	out.close()
 
+	sh.abort()
+
 def testDeviceStatusQueries(sh):
 	sh.queryDeviceDiagnostics()
 	sh.getDeviceType()
@@ -208,21 +208,105 @@ def testDeviceStatusQueries(sh):
 	sh.getFirmwareVersion()
 	sh.getAPIVersion()
 
-def go():
+def resetDevice(sh):
+	sh.preset()
 
-	logSetup.initLogging()
 
-	sh = SignalHound()
+
+
+def audioTest(sh, freq = 88.7e6):
+
+	print "Executing audio-test"
+
+	import pyaudio
+
+	FORMAT = pyaudio.paFloat32
+	CHANNELS = 1
+	RATE = 32000  # bbFetchAudio returns samples at 32 Khz
+
+	sOut = pyaudio.PyAudio()
+	stream = sOut.open(format = FORMAT, channels = 1, rate = RATE, output = True, frames_per_buffer = 4096)
+
 	# sh.preset()
+	sh.queryDeviceDiagnostics()
+	sh.configureAcquisition("average", "log-scale")
+	sh.configureCenterSpan(100e6, 50e6)
+	sh.configureLevel(-50, 10)
+	sh.configureGain(0)
+	# sh.configureSweepCoupling(9.863e3, 9.863e3, 10, "native", "no-spur-reject")
+	sh.configureWindow("hamming")
+	sh.configureProcUnits("power")
+	sh.configureTrigger("none", "rising-edge", 0, 5)
+	sh.configureIO("dc", "int-ref-out", "out-logic-low")
+	sh.configureDemod("fm", freq, 160e3, 12e3, 20, 75)
+	# sh.getDeviceType()
+	# sh.getSerialNumber()
+	# sh.getFirmwareVersion()
+	# sh.getAPIVersion()
+	# sh.initiate("raw-sweep-loop", 0)
+	sh.initiate("audio-demod", "demod-fm")
+	# print sh.queryTimestamp()
+	# sh.startRawSweepLoop(testFunct)
 
-	# testDeviceStatusQueries(sh)
-	# testRawPipeMode(sh)
-	testSweeps(sh)
-	# testCallback(sh)
+	try:
+		while 1:
+			audio = sh.fetchAudio()  # fetchAudio is blocking.
+			stream.write(audio.astype(np.float32).tostring())
+
+	except KeyboardInterrupt:
+		pass
+	# sh.configureTimeGate(0,0,0)
+	# sh.configureRawSweep(500, 10, 16)
 
 	sh.abort()
-	sh.closeDevice()
 
+def printUsage():
+
+		print "Available tests:"
+		print "	'radio' - Do streaming decode of a FM radio signal"
+		print "	'status' - Query device and API for some status and model information"
+		print "	'raw-pipe' - Try to log data from a raw-pipe connection to disk (warning - uses enormous amounts of disk space)"
+		print "	'callback' - Try to capture data via bbStartRawSweepLoop"
+		print "	'traces' - Fetch formatted traces, and log to disk"
+		print "	'reset' - Reset the connected device"
+
+
+
+def go():
+
+
+
+	if len(sys.argv) <= 1:
+		print "Error! You must enter a test mode!"
+		printUsage()
+		sys.exit()
+
+	funcs = {
+		'radio'    : audioTest,
+		'status'   : testDeviceStatusQueries,
+		'raw-pipe' : testRawPipeMode,
+		'callback' : testCallback,
+		'traces'   : testSweeps,
+		'reset'    : resetDevice
+	}
+
+	if sys.argv[1] in funcs:
+
+		logSetup.initLogging()
+
+		sh = SignalHound()
+		# sh.preset()
+
+		# testDeviceStatusQueries(sh)
+		# testRawPipeMode(sh)
+		funcs[sys.argv[1]](sh)
+		# testCallback(sh)
+
+		sh.closeDevice()
+
+	else:
+		print "Error! You must enter a valid test-mode!"
+		printUsage()
 
 
 if __name__ == "__main__":

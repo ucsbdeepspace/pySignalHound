@@ -15,16 +15,14 @@
 #  * ----------------------------------------------------------------------------
 #
 
-import ctypes as ct
+# TODO: Respin lots of the messy if: elif: else: statements into a dictionary lookup
 
+import ctypes as ct
 import bb_api_h as hf
 
-import logSetup
 import logging
 
-import time
-
-# pylint: disable=R0913, R0912
+# pyloint: disable=
 
 import numpy as np
 from numpy.core.multiarray import int_asbuffer
@@ -205,24 +203,28 @@ class SignalHound():
 		# averaging is chosen the min and max trace arrays returned from bbFetchTrace will contain the same
 		# averaged data
 
-		self.log.info("Setting device acquisition configuration.")
-		if detector == "min-max":
-			detector = ct.c_uint(hf.BB_MIN_AND_MAX)
-		elif detector == "average":
-			detector = ct.c_uint(hf.BB_AVERAGE)
-		else:
-			raise ValueError("Invalid Detector mode! Detector must be either \"average\" or \"min-max\". Specified detector = %s" % detector)
+		detectorVals = {
+			"min-max" : ct.c_uint(hf.BB_MIN_AND_MAX),
+			"average" : ct.c_uint(hf.BB_AVERAGE)
+		}
 
-		if scale == "log-scale":
-			scale = ct.c_uint(hf.BB_LOG_SCALE)
-		elif scale == "log-full-scale":
-			scale = ct.c_uint(hf.BB_LOG_FULL_SCALE)
-		elif scale == "lin-scale":
-			scale = ct.c_uint(hf.BB_LIN_SCALE)
-		elif scale == "lin-full-scale":
-			scale = ct.c_uint(hf.BB_LIN_FULL_SCALE)
+		scaleVals = {
+			"log-scale"      : ct.c_uint(hf.BB_LOG_SCALE),
+			"log-full-scale" : ct.c_uint(hf.BB_LOG_FULL_SCALE),
+			"lin-scale"      : ct.c_uint(hf.BB_LIN_SCALE),
+			"lin-full-scale" : ct.c_uint(hf.BB_LIN_FULL_SCALE)
+		}
+
+		self.log.info("Setting device acquisition configuration.")
+		if detector in detectorVals:
+			detector = detectorVals[detector]
 		else:
-			raise ValueError("Invalid Scaling mode! Scaling mode must be either \"log-scale\" \"log-full-scale\" \"lin-scale\" or \"lin-full-scale\". Specified scale = %s" % scale)
+			raise ValueError("Invalid Detector mode! Detector  must be one of %s. Specified detector = %s" % (detectorVals.keys(), detector))
+
+		if scale in scaleVals:
+			scale = scaleVals[scale]
+		else:
+			raise ValueError("Invalid Scaling mode! Scaling mode must be one of %s. Specified scale = %s" % (scaleVals.keys(), scale))
 
 		err = self.dll.bbConfigureAcquisition(self.deviceHandle, detector, scale)
 
@@ -424,19 +426,25 @@ class SignalHound():
 		vbw        = ct.c_double(vbw)
 		sweepTime  = ct.c_double(sweepTime)
 
-		if rbwType == "native":
-			rbwType    = ct.c_uint(hf.BB_NATIVE_RBW)
-		elif rbwType == "non-native":
-			rbwType    = ct.c_uint(hf.BB_NON_NATIVE_RBW)
+
+		rbwVals = {
+			"native"     : ct.c_uint(hf.BB_NATIVE_RBW),
+			"non-native" : ct.c_uint(hf.BB_NON_NATIVE_RBW)
+		}
+
+		rejectionVals = {
+			"no-spur-reject" : ct.c_uint(hf.BB_NO_SPUR_REJECT),
+			"spur-reject"    : ct.c_uint(hf.BB_SPUR_REJECT),
+			"bypass"         : ct.c_uint(hf.BB_BYPASS_RF)
+		}
+
+		if rbwType in rbwVals:
+			rbwType  = rbwVals[rbwType]
 		else:
 			raise ValueError("rbwType must be either \"native\" or \"non-native\". Passed value was %s." % rbwType)
 
-		if rejection == "no-spur-reject":
-			rejection    = ct.c_uint(hf.BB_NO_SPUR_REJECT)
-		elif rejection == "spur-reject":
-			rejection    = ct.c_uint(hf.BB_SPUR_REJECT)
-		elif rejection == "bypass":
-			rejection    = ct.c_uint(hf.BB_BYPASS_RF)
+		if rejection in rejectionVals:
+			rejection    = rejectionVals[rejection]
 		else:
 			raise ValueError("rejection must be either \"no-spur-reject\", \"spur-reject\" or \"bypass\". Passed value was %s." % rejection)
 
@@ -474,14 +482,16 @@ class SignalHound():
 
 		self.log.info("Setting device FFT windowing function.")
 
-		if window == "nutall":
-			window =  hf.BB_NUTALL
-		elif window == "blackman":
-			window = hf.BB_BLACKMAN
-		elif window == "hamming":
-			window = hf.BB_HAMMING
-		elif window == "flat-top":
-			window = hf.BB_FLAT_TOP
+		windows = {
+		"nutall"   : hf.BB_NUTALL,
+		"blackman" : hf.BB_BLACKMAN,
+		"hamming"  : hf.BB_HAMMING,
+		"flat-top" : hf.BB_FLAT_TOP
+		}
+
+
+		if window in windows:
+			window = windows[window]
 		else:
 			raise ValueError("Window function name must be either \"nutall\", \"blackman\", \"hamming\" or \"flat-top\". Passed value was %s." % window)
 
@@ -743,35 +753,42 @@ class SignalHound():
 
 		port1 = 0
 		port2 = 0
-		if port1Coupling == "ac":
-			port1 |= hf.BB_PORT1_AC_COUPLED
-		elif port1Coupling == "dc":
-			port1 |= hf.BB_PORT1_DC_COUPLED
+
+		p1CouplingOpts = {
+			"ac": hf.BB_PORT1_AC_COUPLED,
+			"dc": hf.BB_PORT1_DC_COUPLED
+		}
+
+		p1ModeOpts = {
+			"int-ref-out"    : hf.BB_PORT1_INT_REF_OUT,
+			"ext-ref-in"     : hf.BB_PORT1_EXT_REF_IN,
+			"out-logic-low"  : hf.BB_PORT1_OUT_LOGIC_LOW,
+			"out-logic-high" : hf.BB_PORT1_OUT_LOGIC_HIGH
+		}
+
+		p2ModeOpts = {
+			"int-ref-out"    : hf.BB_PORT2_IN_TRIGGER_RISING_EDGE,
+			"ext-ref-in"     : hf.BB_PORT2_IN_TRIGGER_FALLING_EDGE,
+			"out-logic-low"  : hf.BB_PORT2_OUT_LOGIC_LOW,
+			"out-logic-high" : hf.BB_PORT2_OUT_LOGIC_HIGH
+		}
+
+		if port1Coupling in p1CouplingOpts:
+			port1 |= p1CouplingOpts[port1Coupling]
 		else:
 			raise ValueError("Port1Coupling must be either'ac' or 'dc'. Passed value was %s." % port1Coupling)
 
-		if port1mode == "int-ref-out":
-			port1 |= hf.BB_PORT1_INT_REF_OUT
-		elif port1mode == "ext-ref-in":
-			port1 |= hf.BB_PORT1_EXT_REF_IN
-		elif port1mode == "out-logic-low":
-			port1 |= hf.BB_PORT1_OUT_LOGIC_LOW
-		elif port1mode == "out-logic-high":
-			port1 |= hf.BB_PORT1_OUT_LOGIC_HIGH
+		if port1mode in p1ModeOpts:
+			port1 |= p1ModeOpts[port1mode]
 		else:
-			raise ValueError("port1mode must be either \"int-ref-out\", \"ext-ref-in\", \"out-logic-low\" or \"out-logic-high\". Passed value was %s." % port1mode)
+			raise ValueError("port1mode must be one of %s. Passed value was %s." % (p1ModeOpts.keys(), port1mode))
 
 
-		if port2mode == "int-ref-out":
-			port2 |= hf.BB_PORT2_IN_TRIGGER_RISING_EDGE
-		elif port2mode == "ext-ref-in":
-			port2 |= hf.BB_PORT2_IN_TRIGGER_FALLING_EDGE
-		elif port2mode == "out-logic-low":
-			port2 |= hf.BB_PORT2_OUT_LOGIC_LOW
-		elif port2mode == "out-logic-high":
-			port2 |= hf.BB_PORT2_OUT_LOGIC_HIGH
+
+		if port2mode in p2ModeOpts:
+			port2 |= p2ModeOpts[port2mode]
 		else:
-			raise ValueError("port1mode must be either \"int-ref-out\", \"ext-ref-in\", \"out-logic-low\" or \"out-logic-high\". Passed value was %s." % port1mode)
+			raise ValueError("port2mode must be either \"int-ref-out\", \"ext-ref-in\", \"out-logic-low\" or \"out-logic-high\". Passed value was %s." % port1mode)
 
 
 		port1 = ct.c_uint(port1)
@@ -810,18 +827,19 @@ class SignalHound():
 
 		self.log.info("Setting device demodulator Configuration.")
 
-		if modulationType == "am":
-			modulationType = hf.BB_DEMOD_AM
-		elif modulationType == "fm":
-			modulationType = hf.BB_DEMOD_FM
-		elif modulationType == "usb":
-			modulationType = hf.BB_DEMOD_USB
-		elif modulationType == "lsb":
-			modulationType = hf.BB_DEMOD_LSB
-		elif modulationType == "cw":
-			modulationType = hf.BB_DEMOD_CW
+		modTypeOpts = {
+			"am"  : hf.BB_DEMOD_AM,
+			"fm"  : hf.BB_DEMOD_FM,
+			"usb" : hf.BB_DEMOD_USB,
+			"lsb" : hf.BB_DEMOD_LSB,
+			"cw"  : hf.BB_DEMOD_CW
+		}
+
+
+		if modulationType in modTypeOpts:
+			modulationType = modTypeOpts[modulationType]
 		else:
-			raise ValueError("Modulation Type must be either \"am\", \"fm\", \"usb\", \"lsb\" or \"cw\". Passed value was %s." % modulationType)
+			raise ValueError("Modulation Type must be one of %s. Passed value was %s." % (modTypeOpts.keys(), modulationType))
 
 		if ifBw < 2e3 or ifBw > 500e3:
 			raise ValueError("IFBW Should be between 2kHz and 500kHz.")
@@ -853,51 +871,59 @@ class SignalHound():
 		else:
 			raise IOError("Unknown error setting configureDemod! Error = %s" % err)
 
-	def initiate(self, mode, flag):
+	def initiate(self, mode, flag, gps_timestamp=False):
 		# BB_API bbStatus bbInitiate(int device, unsigned int mode, unsigned int flag);
 
 
-		if mode == "sweeping":
-			mode = hf.BB_SWEEPING
-		elif mode == "real-time":
-			mode = hf.BB_REAL_TIME
-		elif mode == "zero-span":
-			mode = hf.BB_ZERO_SPAN
-		elif mode == "time-gate":
-			mode = hf.BB_TIME_GATE
-		elif mode == "raw-sweep":
-			mode = hf.BB_RAW_SWEEP
-		elif mode == "raw-sweep-loop":
-			mode = hf.BB_RAW_SWEEP_LOOP
-		elif mode == "audio-demod":
-			mode = hf.BB_AUDIO_DEMOD
-		elif mode == "raw-pipe":
-			mode = hf.BB_RAW_PIPE
+		modeOpts = {
+			"sweeping"       : hf.BB_SWEEPING,
+			"real-time"      : hf.BB_REAL_TIME,
+			"zero-span"      : hf.BB_ZERO_SPAN,
+			"time-gate"      : hf.BB_TIME_GATE,
+			"raw-sweep"      : hf.BB_RAW_SWEEP,
+			"raw-sweep-loop" : hf.BB_RAW_SWEEP_LOOP,
+			"audio-demod"    : hf.BB_AUDIO_DEMOD,
+			"raw-pipe"       : hf.BB_RAW_PIPE
+		}
+
+		zeroSpanOpts = {
+			"demod-am" : hf.BB_DEMOD_AM,
+			"demod-fm" : hf.BB_DEMOD_FM
+		}
+
+		rawPipeOpts = {
+			"7-mhz"    : hf.BB_DEMOD_AM,
+			"20-mhz"   : hf.BB_DEMOD_FM
+		}
+
+		if mode in modeOpts:
+			mode = modeOpts[mode]
 		else:
-			raise ValueError("Mode must be one of \"sweeping\", \"real-time\", \"zero-span\", \"time-gate\", \"raw-sweep\", \"raw-sweep-loop\", \"audio-demod\" or \"raw-pipe\". Passed value was %s." % mode)
+			raise ValueError("Mode must be one of %s. Passed value was %s." % (modeOpts, mode))
 
 
 		if mode == hf.BB_ZERO_SPAN:
-			if flag == "demod-am":
-				flag = hf.BB_DEMOD_AM
-			elif flag == "demod-fm":
-				flag = hf.BB_DEMOD_FM
+			if flag in zeroSpanOpts:
+				flag = zeroSpanOpts[flag]
 			else:
 				raise ValueError("Available flag settings for mode \"zero-span\" are \"demod-am\" and \"demod-fm\". Passed value was %s." % flag)
 
 		elif mode == hf.BB_RAW_PIPE:
-			if flag == "7-mhz":
-				flag = hf.BB_DEMOD_AM
-			elif flag == "20-mhz":
-				flag = hf.BB_DEMOD_FM
+			if flag in rawPipeOpts:
+				flag = rawPipeOpts[flag]
 			else:
 				raise ValueError("Available flag settings for mode \"raw-pipe\" are \"7-mhz\" or \"20-mhz\". Passed value was %s." % flag)
 
-			self.log.warning("GPS flag configuration masking not currently supported")
+
 
 		else:
 			flag = 0
 
+		if gps_timestamp:
+			self.log.info("Timestamping returned data with GPS time")
+			flag |= hf.BB_TIME_STAMP
+
+		self.log.warning("GPS flag configuration masking not currently supported")
 
 		mode = ct.c_uint(mode)
 		flag = ct.c_uint(flag)
@@ -1008,7 +1034,7 @@ class SignalHound():
 		err = self.dll.bbFetchAudio(self.deviceHandle, audioArrPtr)
 
 		if err == self.bbStatus["bbNoError"]:
-			self.log.info("Call to fetchTrace succeeded.")
+			self.log.info("Call to fetchAudio succeeded.")
 		elif err == self.bbStatus["bbNullPtrErr"]:
 			raise IOError("Null pointer error!")
 		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
@@ -1539,9 +1565,40 @@ class SignalHound():
 	def syncCPUtoGPS(self, comPort, baudRate):
 		# BB_API bbStatus bbSyncCPUtoGPS(int comPort, int baudRate);
 
-		self.log.error("GPS Synchronization not yet implemented.")
-		self.log.error("e-mail Connor at connorw@imaginaryindustries.com for more information")
 
+		self.log.warning("GPS Synchronization not yet verified.")
+		self.log.warning("e-mail Connor at connorw@imaginaryindustries.com if you have issues or comments")
+
+
+		# comPort  Com port number for the NMEA data output from the GPS reciever.
+		# baudRate  Baud Rate of the Com port
+
+		# The connection to the COM port is only established for the duration of this function. It is closed when
+		# the function returns. Call this function once before using a GPS PPS signal to time-stamp RF data. The
+		# synchronization will remain valid until the CPU clock drifts more than ¼ second, typically several hours,
+		# and will re-synchronize continually while streaming data using a PPS trigger input.
+		# This function calculates the offset between your CPU clock time and the GPS clock time to within a few
+		# milliseconds, and stores this value for time-stamping RF data using the GPS PPS trigger. This function
+		# ignores time zone, limiting the calculated offset to +/- 30 minutes. It was tested using an FTS 500 from
+		# Connor Winfield at 38.4 kbaud. It uses the “$GPRMC” string, so you must set up your GPS to output this
+		# string.
+
+
+		self.log.info("Attempting to synchronize CPU with GPS timebase.")
+
+		comPort = ct.c_int(comPort)
+		baudRate = ct.c_int(baudRate)
+
+		err = self.dll.bbSyncCPUtoGPS(comPort, baudRate)
+
+		if err == self.bbStatus["bbNoError"]:
+			self.log.info("Call to syncCPUtoGPS succeeded.")
+		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
+			raise IOError("Device not open!")
+		elif err == self.bbStatus["bbGPSErr"]:
+			raise IOError("Could not connect to GPS!")
+		else:
+			raise IOError("Unknown error synchronizing with GPS! Error = %s" % err)
 
 	def getDeviceType(self):
 		# BB_API bbStatus bbGetDeviceType(int device, int *type);
