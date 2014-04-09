@@ -27,7 +27,7 @@ import logging
 import numpy as np
 from numpy.core.multiarray import int_asbuffer
 
-class SignalHound():
+class SignalHound(object):
 
 	bbStatus = {
 		"bbInvalidModeErr"             : -112,
@@ -83,12 +83,20 @@ class SignalHound():
 		self.openDevice()
 
 	def __del__(self):
+		self.log.info("Deleting SignalHound Interface Class")
 
 		if self.devOpen:
 			self.closeDevice()
 
 		if self.cRawSweepCallbackFunc:
 			del(self.cRawSweepCallbackFunc)
+
+		self.log.info("Forcing DLL handle closed")
+		try:
+			ct.windll.kernel32.FreeLibrary(self.dll._handle)
+		except ct.ArgumentError:
+			pass
+
 
 	def openDevice(self):
 
@@ -175,7 +183,7 @@ class SignalHound():
 		}
 
 		if ret["currentUSB"] < 4.4:
-			raise EnvironmentError("USB Supply voltage below specified minimum of 4.4V. Please check hardware.")
+			raise EnvironmentError("USB Supply voltage below specified minimum of 4.4V. Please check hardware. Read supply voltage = %f" % ret["currentUSB"])
 
 		if ret["temperature"] > 70 or ret["temperature"] < 0:
 			raise EnvironmentError("Hardware temperature outside of normal operating bounds.")
@@ -592,6 +600,12 @@ class SignalHound():
 
 		self.log.info("Setting device trigger configuration.")
 
+
+		videoTrigDict = {
+			"rising-edge"  : hf.BB_TRIGGER_RISING,
+			"falling-edge" : hf.BB_TRIGGER_FALLING
+		}
+
 		if trigType == "none":
 			trigType =  hf.BB_NO_TRIGGER
 		elif trigType == "video":
@@ -601,15 +615,14 @@ class SignalHound():
 			self.log.warning("configureIO must be called to set up BNC port 2 as an input for proper external trigger operation")
 		elif trigType == "gps-pps":
 			raise ValueError("GPS PPS Trigger not supported in API files. Please contact Test-Equipment-Plus for more information.")
+			# self.log.warning("GPS synchronization is not tested, and the setup constants are partially just guessed. ")
 			# trigType = hf.BB_GPS_PPS_TRIGGER
 		else:
 			raise ValueError("Trigger type must be either \"none\", \"video\", \"external\" or \"gps-pps\". Passed value was %s." % trigType)
 
 		if trigType == hf.BB_VIDEO_TRIGGER:
-			if edge == "rising-edge":
-				edge =  hf.BB_TRIGGER_RISING
-			elif edge == "falling-edge":
-				edge = hf.BB_TRIGGER_FALLING
+			if edge in videoTrigDict:
+				edge = videoTrigDict[trigType]
 			else:
 				raise ValueError("Trigger type for vide-triggering must be either \"rising-edge\", \"falling-edge\". Passed value was %s." % edge)
 		else:
@@ -874,6 +887,26 @@ class SignalHound():
 	def initiate(self, mode, flag, gps_timestamp=False):
 		# BB_API bbStatus bbInitiate(int device, unsigned int mode, unsigned int flag);
 
+		# device  Handle to the device being configured.
+		# mode  The possible values for mode are BB_SWEEPING, BB_REAL_TIME,
+		# 	BB_ZERO_SPAN, BB_TIME_GATE, BB_RAW_SWEEP,
+		# 	BB_RAW_SWEEP_LOOP, BB_AUDIO_DEMOD, and BB_RAW_PIPE.
+		# flag  The default value is zero.
+		# 	If mode equals BB_ZERO_SPAN, flag can be used to denote the type of
+		# 	modulation performed on the incoming signal. BB_DEMOD_AM and
+		# 	BB_DEMOD_FM are the two options.
+		# 	If mode equals BB_RAW_PIPE, flag is used to denote the retreived
+		# 	bandwidth. BB_SEVEN_MHZ or BB_TWENTY_MHZ is used to change the
+		# 	desired capture bandwidth. flag can be used to inform the API to time
+		# 	stamp data using an external GPS reciever. Mask the bandwidth flag (‘|’
+		# 	in C) with BB_TIME_STAMP to achieve this. See Appendix:Using a GPS
+		# 	Receiver to Time-Stamp Data for information on how to set this up.
+
+		# bbInitiate configures the device into a state determined by the mode parameter. For more information
+		# regarding operating states, refer to the Theory of Operation and Modes of Operation sections. This
+		# function calls bbAbort before attempting to reconfigure. It should be noted, if an error is returned, any
+		# past operating state will no longer be active.
+		# Pay special attention to the bbInvalidParameterErr description below
 
 		modeOpts = {
 			"sweeping"       : hf.BB_SWEEPING,
@@ -922,8 +955,6 @@ class SignalHound():
 		if gps_timestamp:
 			self.log.info("Timestamping returned data with GPS time")
 			flag |= hf.BB_TIME_STAMP
-
-		self.log.warning("GPS flag configuration masking not currently supported")
 
 		mode = ct.c_uint(mode)
 		flag = ct.c_uint(flag)
@@ -980,7 +1011,8 @@ class SignalHound():
 		err = self.dll.bbFetchTrace(self.deviceHandle, arraySize, minPtr, maxPtr)
 
 		if err == self.bbStatus["bbNoError"]:
-			self.log.info("Call to fetchTrace succeeded.")
+			# self.log.info("Call to fetchTrace succeeded.")  # Commented out because it was NOISY
+			pass
 		elif err == self.bbStatus["bbNullPtrErr"]:
 			raise IOError("Null pointer error!")
 		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
@@ -1198,7 +1230,7 @@ class SignalHound():
 
 
 		data = SignalHound.fastDecodeArray(rawBuf, arraySize, np.short)
-		triggers = SignalHound.fastDecodeArray(triggers, triggerArraySizem, np.int)
+		triggers = SignalHound.fastDecodeArray(triggers, triggerArraySize, np.int32)
 
 		ret = {
 			"data" : data,
@@ -1243,7 +1275,7 @@ class SignalHound():
 
 
 		data = SignalHound.fastDecodeArray(rawBuf, arraySize, np.short)
-		triggers = SignalHound.fastDecodeArray(triggers, triggerArraySizem, np.int)
+		triggers = SignalHound.fastDecodeArray(triggers, triggerArraySize, np.int32)
 
 		ret = {
 			"data" : data,
@@ -1294,7 +1326,7 @@ class SignalHound():
 			raise IOError("Unknown error setting fetchRawSweep! Error = %s" % err)
 
 
-		data = SignalHound.fastDecodeArray(rawBuf, arraySize, np.short)
+		data = SignalHound.fastDecodeArray(rawBuf, bufLen, np.short)
 
 		return data
 
@@ -1471,7 +1503,6 @@ class SignalHound():
 		# BB_API bbStatus bbAbort(int device);
 
 		# Stops the device operation and places the device into an idle state.
-
 
 		# cleanup state variables used in various modes.
 		try:

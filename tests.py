@@ -15,7 +15,7 @@
 #  * ----------------------------------------------------------------------------
 #
 
-# pylint: disable=R0913, R0912
+# pylint: disable=R0913, R0912, W0603
 
 import logSetup
 import sys
@@ -29,12 +29,12 @@ DATA_LOG = []
 
 def callbackTestFunc(bufPtr, bufLen):
 	global START_TIME  #hacking about for determining callback interval times. I shouldn't be using global, but fukkit.
-	global DATA_LOG
+
 	now = time.time()
 
 	print "Callback!", bufPtr, bufLen
 	print bufPtr[0]
-	# HOLY UNPACKING ONE-LINER BATMAN
+
 	arr = SignalHound.decodeRawSweep(bufPtr, bufLen)
 
 	print "NP Array = ", arr.shape, arr
@@ -65,7 +65,7 @@ def testCallback(sh):
 
 def testRawPipeMode(sh):
 	global START_TIME  #hacking about for determining callback interval times. I shouldn't be using global, but fukkit.
-	global DATA_LOG
+
 	START_TIME = time.time()
 	loops = 0
 
@@ -132,23 +132,23 @@ def testRawPipeMode(sh):
 
 def testSweeps(sh):
 	global START_TIME  #hacking about for determining callback interval times. I shouldn't be using global, but fukkit.
-	global DATA_LOG
+
 	START_TIME = time.time()
 	loops = 0
 
 	sh.configureAcquisition("average", "log-scale")
-	sh.configureCenterSpan(150e6, 100e6)
-	sh.configureLevel(10, "auto")
-	sh.configureGain(0)
-	sh.configureSweepCoupling(9.863e3, 9.863e3, 0.010, "native", "no-spur-reject")
-	sh.configureWindow("hamming")
-	sh.configureProcUnits("power")
-	sh.configureTrigger("none", "rising-edge", 0, 5)
-	sh.configureIO("dc", "int-ref-out", "out-logic-low")
-	sh.configureDemod("fm", 102.3e6, 250e3, 12e3, 20, 50)
+	sh.configureCenterSpan(center = 150e6, span = 100e6)
+	sh.configureLevel(ref = 10, atten = "auto")
+	sh.configureGain(gain = 0)
+	sh.configureSweepCoupling(rbw = 9.863e3, vbw = 9.863e3, sweepTime = 0.10, rbwType = "native", rejection = "no-spur-reject")
+	sh.configureWindow(window = "hamming")
+	sh.configureProcUnits(units = "power")
+	sh.configureTrigger(trigType = "none", edge = "rising-edge", level = 0, timeout = 5)
+	# sh.configureIO("dc", "int-ref-out", "out-logic-low")
+	# sh.configureDemod("fm", 102.3e6, 250e3, 12e3, 20, 50)
 
 	# sh.configureRawSweep(100, 8, 2)
-	sh.initiate("sweeping", "ignored")
+	sh.initiate(mode = "sweeping", flag = "ignored")
 	print sh.queryTraceInfo()
 	# sh.initiate("raw-sweep-loop", 0)
 	# print sh.queryTimestamp()
@@ -184,8 +184,96 @@ def testSweeps(sh):
 				START_TIME = now
 			if len(DATA_LOG):
 				tmp = DATA_LOG.pop()
-				out.write(tmp["max"])
-				out.write(tmp["min"])
+				print np.array_str(tmp["max"], max_line_width = sys.maxint), len(tmp["max"])
+
+				outStr = ""
+				# outStr = "%s, " % time.time()
+				outStr += " ".join(['%f,' % num for num in tmp["max"]])
+				outStr = outStr.rstrip(", ").lstrip(", ")
+				outStr += "\n"
+
+
+
+				out.write(outStr)
+
+				# for item in tmp["max"]:
+				# 	 print item
+
+			loops += 1
+
+		time.sleep(50)
+
+	except KeyboardInterrupt:
+		pass
+
+	out.close()
+
+	sh.abort()
+
+def testGpsSweeps(sh):
+	global START_TIME  #hacking about for determining callback interval times. I shouldn't be using global, but fukkit.
+
+	START_TIME = time.time()
+	loops = 0
+
+	sh.configureAcquisition("average", "log-scale")
+	sh.configureCenterSpan(center = 150e6, span = 100e6)
+	sh.configureLevel(ref = 10, atten = "auto")
+	sh.configureGain(gain = 0)
+	sh.configureSweepCoupling(rbw = 9.863e3, vbw = 9.863e3, sweepTime = 0.10, rbwType = "native", rejection = "no-spur-reject")
+	sh.configureWindow(window = "hamming")
+	sh.configureProcUnits(units = "power")
+	sh.configureTrigger(trigType = "gps-pps", edge = "rising-edge", level = 0, timeout = 5)
+	# sh.configureIO("dc", "int-ref-out", "out-logic-low")
+	# sh.configureDemod("fm", 102.3e6, 250e3, 12e3, 20, 50)
+
+	# sh.configureRawSweep(100, 8, 2)
+	sh.initiate(mode = "sweeping", flag = "ignored")
+	print sh.queryTraceInfo()
+	# sh.initiate("raw-sweep-loop", 0)
+	# print sh.queryTimestamp()
+	# sh.startRawSweepLoop(callbackTestFunc)
+
+	# ret = sh.fetchRawCorrections()
+	# for key, value in ret.iteritems():
+	# 	print key, value
+
+	# for item in ret["data"]:
+	# 	st = "%f" % item
+	# 	print st.rjust(12),
+	# 	if loops % 10 == 0:
+	# 		print
+	# 	loops += 1
+
+	out = open("dat.bin", "wb")
+
+	try:
+		while 1:
+			try:
+				DATA_LOG.append(sh.fetchTrace())
+			except IOError:
+
+				print "ioerror"
+
+			if loops % 20 == 0:
+				print loops
+				now = time.time()
+				delta = now-START_TIME
+				freq = 1 / (delta / 20)
+				print "Elapsed Time = ", delta, "Frequency = ", freq
+				START_TIME = now
+			if len(DATA_LOG):
+				tmp = DATA_LOG.pop()
+				print np.array_str(tmp["max"], max_line_width = sys.maxint), len(tmp["max"])
+
+				outStr = ""
+				# outStr = "%s, " % time.time()
+				outStr += " ".join(['%f,' % num for num in tmp["max"]])
+				outStr = outStr.rstrip(", ").lstrip(", ")
+				outStr += "\n"
+
+
+				out.write(outStr)
 
 				# for item in tmp["max"]:
 				# 	 print item
@@ -220,24 +308,24 @@ def audioTest(sh, freq = 88.7e6):
 
 	import pyaudio
 
-	FORMAT = pyaudio.paFloat32
-	CHANNELS = 1
-	RATE = 32000  # bbFetchAudio returns samples at 32 Khz
+	c_FORMAT = pyaudio.paFloat32
+	c_CHANNELS = 1
+	c_RATE = 32000  # bbFetchAudio returns samples at 32 Khz
 
 	sOut = pyaudio.PyAudio()
-	stream = sOut.open(format = FORMAT, channels = 1, rate = RATE, output = True, frames_per_buffer = 4096)
+	stream = sOut.open(format = c_FORMAT, channels = c_CHANNELS, rate = c_RATE, output = True, frames_per_buffer = 4096)
 
 	# sh.preset()
 	sh.queryDeviceDiagnostics()
-	sh.configureAcquisition("average", "log-scale")
-	sh.configureCenterSpan(100e6, 50e6)
-	sh.configureLevel(-50, 10)
-	sh.configureGain(0)
+	# sh.configureAcquisition("average", "log-scale")
+	# sh.configureCenterSpan(100e6, 50e6)
+	# sh.configureLevel(-50, 10)
+	# sh.configureGain(0)
 	# sh.configureSweepCoupling(9.863e3, 9.863e3, 10, "native", "no-spur-reject")
-	sh.configureWindow("hamming")
-	sh.configureProcUnits("power")
-	sh.configureTrigger("none", "rising-edge", 0, 5)
-	sh.configureIO("dc", "int-ref-out", "out-logic-low")
+	# sh.configureWindow("hamming")
+	# sh.configureProcUnits("power")
+	# sh.configureTrigger("none", "rising-edge", 0, 5)
+	# sh.configureIO("dc", "int-ref-out", "out-logic-low")
 	sh.configureDemod("fm", freq, 160e3, 12e3, 20, 75)
 	# sh.getDeviceType()
 	# sh.getSerialNumber()
@@ -277,7 +365,7 @@ def go():
 
 
 	if len(sys.argv) <= 1:
-		print "Error! You must enter a test mode!"
+		print "You must enter a test mode!"
 		printUsage()
 		sys.exit()
 
@@ -287,6 +375,7 @@ def go():
 		'raw-pipe' : testRawPipeMode,
 		'callback' : testCallback,
 		'traces'   : testSweeps,
+		'gps'      : testGpsSweeps,
 		'reset'    : resetDevice
 	}
 
@@ -299,7 +388,11 @@ def go():
 
 		# testDeviceStatusQueries(sh)
 		# testRawPipeMode(sh)
-		funcs[sys.argv[1]](sh)
+		if len(sys.argv) == 2:
+			funcs[sys.argv[1]](sh)
+		if len(sys.argv) == 3:
+			funcs[sys.argv[1]](sh, float(sys.argv[2]))
+
 		# testCallback(sh)
 
 		sh.closeDevice()

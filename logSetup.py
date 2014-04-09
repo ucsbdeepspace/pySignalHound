@@ -23,14 +23,14 @@ class ColourHandler(logging.Handler):
 			record.colour = clr.Fore.BLUE
 		elif record.name == "Main.DevPlugin":
 			record.colour = clr.Fore.RED
-		elif record.name == "Main.3":
+		elif record.name == "Main.Main":
 			record.colour = clr.Fore.GREEN
-		elif record.name == "Main.4":
-			record.colour = clr.Fore.YELLOW
-		elif record.name == "Main.5":
-			record.colour = clr.Fore.MAGENTA
-		elif record.name == "Main.6":
+		elif record.name == "Main.LogPlugin":
 			record.colour = clr.Fore.CYAN
+		elif record.name == "Main.5":
+			record.colour = clr.Fore.YELLOW
+		elif record.name == "Main.6":
+			record.colour = clr.Fore.MAGENTA
 		else:
 			record.colour = clr.Fore.WHITE
 
