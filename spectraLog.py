@@ -22,24 +22,23 @@ import multiprocessing as mp
 import logSetup
 import logging
 import sys
-import time
 import spectraAcqThread
 import spectraLogThread
+import printThread
 
-import traceback
-import signal
-import sys
 
 
 
 def go():
 
 
-	logSetup.initLogging()
-	log = logging.getLogger("Main.Main")
 
 	dataQueue = mp.Queue()
+	printQueue = mp.Queue()
 	ctrlManager = mp.Manager()
+
+	logSetup.initLogging(printQ = printQueue)
+	log = logging.getLogger("Main.Main")
 
 	ctrlNs = ctrlManager.Namespace()
 	ctrlNs.run = True
@@ -47,11 +46,17 @@ def go():
 	ctrlNs.logRunning = True
 	ctrlNs.stopped = False
 
-	acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="SweepThread", args=(dataQueue, ctrlNs))
+	acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="SweepThread", args=(dataQueue, ctrlNs, printQueue))
 	acqProc.start()
 
-	logProc = mp.Process(target=spectraLogThread.logSweeps, name="SweepThread", args=(dataQueue, ctrlNs))
+	logProc = mp.Process(target=spectraLogThread.logSweeps, name="SweepThread", args=(dataQueue, ctrlNs, printQueue))
 	logProc.start()
+
+
+	# A separate process for printing, which allows nice easy non-blocking printing.
+	printProc = mp.Process(target=printThread.printer, name="SweepThread", args=(printQueue, ctrlNs))
+	printProc.daemon = True
+	printProc.start()
 
 
 	try:
@@ -83,8 +88,11 @@ def go():
 	while acqProc.is_alive() and logProc.is_alive():
 		if not dataQueue.empty():
 			dataQueue.get()
+		if not printQueue.empty():
+			printQueue.get()
 		acqProc.join(0.001)
 		logProc.join(0.001)
+		printProc.join(0.001)
 
 
 	log.info("Threads stopped.")

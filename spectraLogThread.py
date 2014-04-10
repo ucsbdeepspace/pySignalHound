@@ -19,27 +19,47 @@
 import logSetup
 import logging
 import time
-import traceback
 import numpy as np
 
+import os
+import os.path
+import time
 
 NUM_AVERAGE = 500
 
-def logSweeps(dataQueue, ctrlNs):
+def logSweeps(dataQueue, ctrlNs, printQueue):
 
 
-	log = logging.getLogger("Main.LogPlugin")
-	logSetup.initLogging()
+	log = logging.getLogger("Main.LogProcess")
+	logSetup.initLogging(printQ = printQueue)
 	loop_timer = time.time()
 
+	logName = time.strftime("Datalog - %Y %m %d, %a, %H-%M-%S.csv", time.localtime())
+	logPath = time.strftime("./Data/%Y/%m/%d/", time.localtime())
 
-	out = open("dat.log", "wb")
+	os.makedirs(logPath)
+	logFQPath = os.path.join(logPath, logName)
+
+	log.info("Logging data to %s", logFQPath)
+	out = open(logFQPath, "wb")
 
 	items = []
 	while 1:
 
 		if not dataQueue.empty():
-			items.append(dataQueue.get()["max"])
+
+			tmp = dataQueue.get()
+
+			if "max" in tmp:
+				items.append(tmp["max"])
+			else:
+				infoStr = ""
+				for key, val in tmp.iteritems():
+					if isinstance(val, dict):
+						val["averaging-interval"] = NUM_AVERAGE
+					infoStr += ", %s - %s" % (key, val)
+				infoStr = "# %s\n" % infoStr.rstrip(", ").lstrip(", ")
+				out.write(infoStr)
 
 		if len(items) == NUM_AVERAGE:
 

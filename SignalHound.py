@@ -72,7 +72,7 @@ class SignalHound(object):
 
 	def __init__(self):
 
-		self.log = logging.getLogger("Main.DevPlugin")
+		self.log = logging.getLogger("Main.DeviceInt")
 		self.devOpen = False
 
 		self.log.info("Opening DLL")
@@ -81,6 +81,8 @@ class SignalHound(object):
 		self.cRawSweepCallbackFunc = None
 
 		self.openDevice()
+
+		self.acq_conf = {}
 
 	def __del__(self):
 		self.log.info("Deleting SignalHound Interface Class")
@@ -91,6 +93,12 @@ class SignalHound(object):
 		if self.cRawSweepCallbackFunc:
 			del(self.cRawSweepCallbackFunc)
 
+
+		# Note: This is *probably* not needed. I was having some issues with dangling handles when doing
+		# multople-process data-logging, and it was part of the debugging effort from that.
+		# At this point, it's probably uneeded (it wasn't the root of the issue), but it's
+		# harmless, and I figure it's better to explicitly clean-up the DLL handle then
+		# rely on it happening automatically
 		self.log.info("Forcing DLL handle closed")
 		try:
 			ct.windll.kernel32.FreeLibrary(self.dll._handle)
@@ -211,6 +219,9 @@ class SignalHound(object):
 		# averaging is chosen the min and max trace arrays returned from bbFetchTrace will contain the same
 		# averaged data
 
+		self.acq_conf["detector"] = detector
+		self.acq_conf["scale"] = scale
+
 		detectorVals = {
 			"min-max" : ct.c_uint(hf.BB_MIN_AND_MAX),
 			"average" : ct.c_uint(hf.BB_AVERAGE)
@@ -266,6 +277,10 @@ class SignalHound(object):
 		# Certain modes of operation have specific frequency range limits. Those mode dependent limits are
 		# tested against during initialization and not here.
 
+
+		self.acq_conf["center_freq"] = center
+		self.acq_conf["span_freq"] = span
+
 		self.log.info("Setting device frequency center & span settings.")
 		center = ct.c_double(center)
 		span = ct.c_double(span)
@@ -300,6 +315,12 @@ class SignalHound(object):
 		# When attenuation is automatic, the attenuation and gain for each band is selected independently. When
 		# attenuation is not automatic, a flat attenuation is set across the entire spectrum. A set attenuation may
 		# produce a non-flat noise floor.
+
+
+
+		self.acq_conf["ref_level"] = ref
+		self.acq_conf["in_atten"] = atten
+
 
 		if atten == "auto":
 			atten = -1
@@ -340,6 +361,9 @@ class SignalHound(object):
 		# filtering, which is selected for medium or high gain and bypassed for low or no gain.
 		# Additionally, the IF has an amplifier which is bypassed only for a gain of zero.
 		# For the highest gain settings, additional amplification in the ADC stage is used.
+
+
+		self.acq_conf["rf_gain"] = gain
 
 		self.log.info("Setting device reference gain.")
 
@@ -428,7 +452,47 @@ class SignalHound(object):
 		# MHz and 3 GHz, need the lowest possible phase noise, and do not need any image rejection,
 		# BB_BYPASS_RF can be used to rewire the front end for lowest phase noise.
 
+		'''
+		Native Bandwidths (Hz)      FFT size
+		        10.10e6              16
+		         5.050e6             32
+		         2.525e6             64
+		         1.262e6            128
+		       631.2e3              256  Largest Real-Time RBW
+		       315.6e3              512
+		       157.1e3             1024
+		        78.90e3            2048
+		        39.45e3            4096
+		        19.72e3            8192
+		         9.863e3          16384
+		         4.931e3          32768
+		         2.465e3          65536  Smallest Real-Time RBW
+		         1.232e3         131072
+		       616.45            262144
+		       308.22            524288
+		       154.11           1048576
+		       154.11           1048576
+		        77.05           2097152
+		        38.52           4194304
+		        19.26           8388608
+		         9.63          16777549
+		         4.81          33554432
+		         2.40          67108864
+		         1.204        134217728
+		         0.602        268435456
+		         0.301        536870912
+
+		'''
+
+
 		self.log.info("Setting device sweep coupling settings.")
+
+
+		self.acq_conf["rbw"]       = rbw
+		self.acq_conf["vbw"]       = vbw
+		self.acq_conf["sweepTime"] = sweepTime
+		self.acq_conf["rbwType"]   = rbwType
+		self.acq_conf["rejection"] = rejection
 
 		rbw        = ct.c_double(rbw)
 		vbw        = ct.c_double(vbw)
@@ -490,11 +554,13 @@ class SignalHound(object):
 
 		self.log.info("Setting device FFT windowing function.")
 
+		self.acq_conf["fft_window"] = window
+
 		windows = {
-		"nutall"   : hf.BB_NUTALL,
-		"blackman" : hf.BB_BLACKMAN,
-		"hamming"  : hf.BB_HAMMING,
-		"flat-top" : hf.BB_FLAT_TOP
+			"nutall"   : hf.BB_NUTALL,
+			"blackman" : hf.BB_BLACKMAN,
+			"hamming"  : hf.BB_HAMMING,
+			"flat-top" : hf.BB_FLAT_TOP
 		}
 
 
@@ -538,6 +604,9 @@ class SignalHound(object):
 		# BB_VOLTAGE  = mV
 		# BB_POWER    = mW
 		# BB_BYPASS   = No video processing
+
+
+		self.acq_conf["data_units"] = units
 
 		self.log.info("Setting device video processing units.")
 
@@ -599,7 +668,10 @@ class SignalHound(object):
 		# found, the data returned at the end of the timeout period is returned.
 
 		self.log.info("Setting device trigger configuration.")
-
+		self.acq_conf["trigType"]     = trigType
+		self.acq_conf["trig_edge"]    = edge
+		self.acq_conf["trig_level"]   = level
+		self.acq_conf["trig_timeout"] = timeout
 
 		videoTrigDict = {
 			"rising-edge"  : hf.BB_TRIGGER_RISING,
@@ -705,8 +777,8 @@ class SignalHound(object):
 			raise ValueError("The final center frequency, obtained by the equation (start + steps*20), cannot be greater than 6000 (6 GHz).")
 
 
-		self.ppf = ppf
-		self.steps = steps
+		self.acq_conf["ppf"] = ppf
+		self.acq_conf["steps"] = steps
 
 		start = ct.c_int(start)
 		ppf = ct.c_int(ppf)
@@ -908,6 +980,9 @@ class SignalHound(object):
 		# past operating state will no longer be active.
 		# Pay special attention to the bbInvalidParameterErr description below
 
+		self.acq_conf["acq_mode"] = mode
+		self.acq_conf["acq_flag"] = flag
+
 		modeOpts = {
 			"sweeping"       : hf.BB_SWEEPING,
 			"real-time"      : hf.BB_REAL_TIME,
@@ -952,6 +1027,21 @@ class SignalHound(object):
 		else:
 			flag = 0
 
+		if mode == hf.BB_REAL_TIME:
+			if not "span_freq" in self.acq_conf:
+				raise ValueError("You must call configureCenterSpan() before initiate()!")
+			elif (self.acq_conf["span_freq"] > hf.BB_MAX_RT_SPAN or
+				self.acq_conf["span_freq"] < hf.BB_MIN_RT_SPAN ):
+				raise ValueError("Real-time mode maximum span frequency is 20 Mhz. Specified span frequency = %f" % self.acq_conf["span_freq"])
+
+			if not "rbw" in self.acq_conf:
+				raise ValueError("You must call configureSweepCoupling() before initiate()!")
+
+			elif (self.acq_conf["rbw"] > hf.BB_MAX_RT_RBW or
+				self.acq_conf["rbw"] < hf.BB_MIN_RT_RBW):
+				raise ValueError("Invalid RBW for Real-time mode. Minimum RBW is %f, maximum RBW is %f. Specified RBW = %f" % (hf.BB_MIN_RT_RBW, hf.BB_MAX_RT_RBW, self.acq_conf["rbw"]))
+
+
 		if gps_timestamp:
 			self.log.info("Timestamping returned data with GPS time")
 			flag |= hf.BB_TIME_STAMP
@@ -966,6 +1056,7 @@ class SignalHound(object):
 		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
 			raise IOError("Device not open!")
 		elif err == self.bbStatus["bbInvalidParameterErr"]:
+			self.log.error("bbInvalidParameterErr!")
 			self.log.error('''In real-time mode, this value may be returned if the span limits defined in the API header are broken. Also in real-time mode, this error will be
 				returned if the resolution bandwidth is outside the limits defined in the API header.''')
 			self.log.error('''In time-gate analysis mode this error will be returned if span limits defined in the API header are broken. Also in time gate analysis, this
@@ -1297,7 +1388,7 @@ class SignalHound(object):
 		# If the function returns successfully the array will contain a full sweep. The shorts will
 
 		try:
-			bufLen = 18688 * self.ppf * self.steps
+			bufLen = 18688 * self.acq_conf["ppf"] * self.acq_conf["steps"]
 		except AttributeError:
 			raise ValueError("You must call configureRawSweep before fetchRawSweep")
 
@@ -1429,7 +1520,7 @@ class SignalHound(object):
 
 		self.traceLen = traceLen.value
 
-		return (traceLen.value, binSize.value, start.value)
+		return {"arr-size" : traceLen.value, "arr-bin-size" : binSize.value, "ret-start-freq" : start.value}
 
 	def queryStreamingCenter(self):
 		# BB_API bbStatus bbQueryStreamingCenter(int device, double *center);
@@ -1505,20 +1596,7 @@ class SignalHound(object):
 		# Stops the device operation and places the device into an idle state.
 
 		# cleanup state variables used in various modes.
-		try:
-			del(self.ppf)
-		except AttributeError:
-			pass
-
-		try:
-			del(self.steps)
-		except AttributeError:
-			pass
-
-		try:
-			del(self.steps)
-		except AttributeError:
-			pass
+		self.acq_conf = {}
 
 
 		self.log.info("Stopping acquisition")
@@ -1757,7 +1835,16 @@ class SignalHound(object):
 
 		return ct.c_char_p(apiRevStr).value  # Dereference pointer, extract string, return it.
 
+	def getCurrentAcquisitionSettings(self):
+		try:
+			tmp = self.queryTraceInfo()
+		except IOError:
+			tmp = {}
 
+		tmp.update(self.queryDeviceDiagnostics())
+		tmp.update(self.acq_conf)
+
+		return tmp
 	# staticmethod, because it's only usefull for dealing with the SignalHound stuff, and yet it should be accessible easily for stuff like callbacks where you don't have.
 	# easy access to the instantiated class pointer
 	@staticmethod

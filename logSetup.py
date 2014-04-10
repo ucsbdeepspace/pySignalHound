@@ -9,8 +9,9 @@ import traceback
 #pylint: disable-msg=E1101
 class ColourHandler(logging.Handler):
 
-	def __init__(self, level=logging.DEBUG):
+	def __init__(self, level=logging.DEBUG, printQ = None):
 		logging.Handler.__init__(self, level)
+		self.queue = printQ
 		self.formatter = logging.Formatter(clr.Style.RESET_ALL+'\r%(asctime)s - %(colour)s%(name)s'+clr.Style.RESET_ALL+'%(padding)s - %(style)s%(levelname)s - %(message)s'+clr.Style.RESET_ALL)
 		clr.init()
 
@@ -21,15 +22,15 @@ class ColourHandler(logging.Handler):
 
 		if record.name == "Main.Interface":
 			record.colour = clr.Fore.BLUE
-		elif record.name == "Main.DevPlugin":
+		elif record.name == "Main.DeviceInt":
 			record.colour = clr.Fore.RED
 		elif record.name == "Main.Main":
 			record.colour = clr.Fore.GREEN
-		elif record.name == "Main.LogPlugin":
+		elif record.name == "Main.LogProcess":
 			record.colour = clr.Fore.CYAN
-		elif record.name == "Main.5":
+		elif record.name == "Main.AcqProcess":
 			record.colour = clr.Fore.YELLOW
-		elif record.name == "Main.6":
+		elif record.name == "Main.Printer":
 			record.colour = clr.Fore.MAGENTA
 		else:
 			record.colour = clr.Fore.WHITE
@@ -63,7 +64,11 @@ class ColourHandler(logging.Handler):
 				# print text
 
 		record.padding = ""
-		print self.format(record)
+
+		if self.queue:
+			self.queue.put(self.format(record))
+		else:
+			print self.format(record)
 
 class RobustFileHandler(logging.FileHandler):
 	"""
@@ -116,12 +121,12 @@ def exceptHook(exc_type, exc_value, exc_traceback):
 
 
 
-def initLogging(logLevel=logging.INFO):
+def initLogging(logLevel=logging.INFO, printQ = None):
 	print "Setting up loggers....",
 
 	mainLogger = logging.getLogger("Main")                  # Main logger
 	mainLogger.setLevel(logLevel)
-	ch = ColourHandler()
+	ch = ColourHandler(printQ = printQ)
 	mainLogger.addHandler(ch)
 
 	logName = "Error - %s.txt" % (time.strftime("%Y-%m-%d %H;%M;%S", time.gmtime()))
