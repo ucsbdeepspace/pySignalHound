@@ -28,7 +28,7 @@ H_FLIP_FREQ            = 1.420405751786e9
 # prevent the signal of interest (h-flip band) from being exactly centered in the acquired data.
 # I suspect the IF runs at the center frequency, and is sensitive to +-10 Mhz around the center.
 # Therefore, I can see some of the IF center-frequency creeping into the actual data.
-ACQ_FREQ               = H_FLIP_FREQ + 2.5e6
+ACQ_FREQ               = H_FLIP_FREQ + 12.5e6
 ACQ_SPAN               = 20e6
 
 ACQ_REF_LEVEL_DB       = -50
@@ -43,12 +43,15 @@ ACQ_SWEEP_TIME_SECONDS = 0.010
 ACQ_WINDOW_TYPE        = "hamming"
 ACQ_UNITS              = "power"
 
-PRINT_LOOP_CNT = 100
-CAL_CHK_LOOP_CNT = 1000
+ACQ_MODE               = "average"
+ACQ_Y_SCALE            = "log-scale"
+
+PRINT_LOOP_CNT         = 100
+CAL_CHK_LOOP_CNT       = 1000
 
 def startAcquisition(sh, dataQueue):
 
-	sh.configureAcquisition("average", "log-scale")
+	sh.configureAcquisition(ACQ_MODE, ACQ_Y_SCALE)
 	sh.configureCenterSpan(center = ACQ_FREQ, span = ACQ_SPAN)
 	sh.configureLevel(ref = ACQ_REF_LEVEL_DB, atten = ACQ_ATTENUATION_DB)
 	sh.configureGain(gain = ACQ_GAIN_SETTING)
@@ -104,6 +107,10 @@ def sweepSource(dataQueue, ctrlNs, printQueue):
 				dataQueue.put({"status" : "Recalibrating IF"})
 				sh.selfCal()
 				startAcquisition(sh, dataQueue)
+				log.warning("Temperature changed > 2.0 C. Delta is %f. Recalibrated!", abs(temperature - temptmp))
+				temperature = temptmp
+			else:
+				log.info("Temperature deviation = %f. Not doing recal, since drift < 2C", abs(temperature - temptmp))
 
 		loops += 1
 

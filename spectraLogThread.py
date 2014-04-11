@@ -21,11 +21,13 @@ import logging
 import time
 import numpy as np
 
+import h5py
+
 import os
 import os.path
 import time
 
-NUM_AVERAGE = 500
+NUM_AVERAGE = 1000
 
 def logSweeps(dataQueue, ctrlNs, printQueue):
 
@@ -34,15 +36,21 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 	logSetup.initLogging(printQ = printQueue)
 	loop_timer = time.time()
 
-	logName = time.strftime("Datalog - %Y %m %d, %a, %H-%M-%S.csv", time.localtime())
+	logName = time.strftime("Datalog - %Y %m %d, %a, %H-%M-%S.h5", time.localtime())
 	logPath = time.strftime("./Data/%Y/%m/%d/", time.localtime())
 
-	os.makedirs(logPath)
+	if not os.path.exists(logPath):
+		os.makedirs(logPath)
+
 	logFQPath = os.path.join(logPath, logName)
 
 	log.info("Logging data to %s", logFQPath)
-	out = open(logFQPath, "wb")
+	out = h5py.File(logFQPath, "w")
 
+	arrWidth = 16384 + 1  # FFT Array is 16384 items wide, +1 for time-stamp
+
+	dset = out.create_dataset('Spectrum_Data', (0,arrWidth), maxshape=(None,arrWidth))
+	calset = out.create_dataset('Acq_info', (0,2), maxshape=(None,2))
 	items = []
 	while 1:
 
@@ -52,14 +60,20 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 
 			if "max" in tmp:
 				items.append(tmp["max"])
-			else:
-				infoStr = ""
+			elif "settings" in tmp:
 				for key, val in tmp.iteritems():
 					if isinstance(val, dict):
 						val["averaging-interval"] = NUM_AVERAGE
-					infoStr += ", %s - %s" % (key, val)
-				infoStr = "# %s\n" % infoStr.rstrip(", ").lstrip(", ")
-				out.write(infoStr)
+					calset.attrs[key] = str(val)
+			elif "status" in tmp:
+
+				calset.resize(calset.shape[0]+1, axis=0)
+				calset[calset.shape[0]-1,:] = [time.time(), 1]
+				log.info("Recalibrated?")
+			else:
+				log.error("WAT? Unknown packet!")
+				log.error(tmp)
+
 
 		if len(items) == NUM_AVERAGE:
 
@@ -68,13 +82,13 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 			arr = np.average(arr, axis=0)
 			# print arr.shape
 
-			outStr = ""
-			outStr = "%s, " % time.time()
-			outStr += " ".join(['%f,' % num for num in arr])
-			outStr = outStr.rstrip(", ").lstrip(", ")
-			outStr += "\n"
+			dat = np.concatenate(([time.time()], arr))
 
-			out.write(outStr)
+			dset.resize(dset.shape[0]+1, axis=0)
+			dset[dset.shape[0]-1,:] = dat
+
+			out.flush()  # FLush early, flush often
+			# Probably a bad idea without a SSD
 
 			items = []
 
@@ -87,7 +101,6 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 		if ctrlNs.acqRunning == False:
 			log.info("Stopping Sweep-thread!")
 			break
-
 
 	out.close()
 

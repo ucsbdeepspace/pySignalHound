@@ -1113,6 +1113,8 @@ class SignalHound(object):
 		elif err == self.bbStatus["bbBufferTooSmallErr"]:
 			raise IOError("The 'arraySize' parameter passed is less than the trace size returned from 'bbQueryTraceInfo'.")
 		elif err == self.bbStatus["bbADCOverflow"]:
+			self.log.warning("Clipping is common on the first acquitition cycle, presumably due to the IF stages settling.")
+			self.log.warning("This error is only a problem if it occurs more then once and not at the immediate start of an acquisition, or immediately following a recalibration.")
 			raise IOError("The ADC has detected clipping of the input signal!")
 		elif err == self.bbStatus["bbNoTriggerFound"]:
 			raise IOError('''In time-gated analysis, if the spectrum returned is not representative of
