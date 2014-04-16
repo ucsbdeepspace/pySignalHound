@@ -28,7 +28,7 @@ H_FLIP_FREQ            = 1.420405751786e9
 # prevent the signal of interest (h-flip band) from being exactly centered in the acquired data.
 # I suspect the IF runs at the center frequency, and is sensitive to +-10 Mhz around the center.
 # Therefore, I can see some of the IF center-frequency creeping into the actual data.
-ACQ_FREQ               = H_FLIP_FREQ + 12.5e6
+ACQ_FREQ               = H_FLIP_FREQ + 2.5e6
 ACQ_SPAN               = 20e6
 
 ACQ_REF_LEVEL_DB       = -50
@@ -47,7 +47,7 @@ ACQ_MODE               = "average"
 ACQ_Y_SCALE            = "log-scale"
 
 PRINT_LOOP_CNT         = 100
-CAL_CHK_LOOP_CNT       = 1000
+CAL_CHK_LOOP_CNT       = 5000
 
 def startAcquisition(sh, dataQueue):
 
@@ -89,10 +89,25 @@ def sweepSource(dataQueue, ctrlNs, printQueue):
 	while 1:
 		try:
 			dataQueue.put(sh.fetchTrace())
-		except IOError:
-
+		except Exception:
 			log.error("IOError in Acquisition Thread!")
 			log.error(traceback.format_exc())
+
+			dataQueue.put({"status" : "Error: Device interface crashed. Reinitializing"})
+			log.error("Resetting hardware!")
+			# sh.preset()
+			sh.forceClose()
+			try:
+				while 1:
+					log.warning("Freeing python device handle")
+					del(sh)
+			except UnboundLocalError:
+				pass
+
+			log.error("Hardware shut down, completely re-initializing device interface!")
+			# sys.exit()
+			sh = SignalHound()
+			startAcquisition(sh, dataQueue)
 
 		if loops % PRINT_LOOP_CNT == 0:
 			now = time.time()
@@ -102,7 +117,10 @@ def sweepSource(dataQueue, ctrlNs, printQueue):
 			loop_timer = now
 
 		if loops % CAL_CHK_LOOP_CNT == 0:
-			temptmp = sh.queryDeviceDiagnostics()["temperature"]
+			diags = sh.queryDeviceDiagnostics()
+			dataQueue.put({"status" : diags})
+
+			temptmp = diags["temperature"]
 			if abs(temperature - temptmp) > 2.0:    # Temperature deviations of > 2° cause IF shifts. Therefore, we do a re-cal if they're detected
 				dataQueue.put({"status" : "Recalibrating IF"})
 				sh.selfCal()

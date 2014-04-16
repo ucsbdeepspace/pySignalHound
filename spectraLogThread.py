@@ -25,7 +25,7 @@ import h5py
 
 import os
 import os.path
-import time
+import cPickle
 
 NUM_AVERAGE = 1000
 
@@ -49,8 +49,11 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 
 	arrWidth = 16384 + 1  # FFT Array is 16384 items wide, +1 for time-stamp
 
-	dset = out.create_dataset('Spectrum_Data', (0,arrWidth), maxshape=(None,arrWidth))
-	calset = out.create_dataset('Acq_info', (0,2), maxshape=(None,2))
+	# Main dataset - compressed, chunked, checksummed.
+	dset = out.create_dataset('Spectrum_Data', (0,arrWidth), maxshape=(None,arrWidth), chunks=True, compression="gzip", fletcher32=True)
+
+	# Cal and system status log dataset.
+	calset = out.create_dataset('Acq_info', (0,1), maxshape=(None,None), dtype=h5py.new_vlen(str))
 	items = []
 	while 1:
 
@@ -60,16 +63,21 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 
 			if "max" in tmp:
 				items.append(tmp["max"])
-			elif "settings" in tmp:
-				for key, val in tmp.iteritems():
-					if isinstance(val, dict):
-						val["averaging-interval"] = NUM_AVERAGE
-					calset.attrs[key] = str(val)
-			elif "status" in tmp:
+			elif "settings" in tmp or "status" in tmp:
 
-				calset.resize(calset.shape[0]+1, axis=0)
-				calset[calset.shape[0]-1,:] = [time.time(), 1]
-				log.info("Recalibrated?")
+				if "settings" in tmp:
+					tmp["settings"]["averaging-interval"] = NUM_AVERAGE
+
+				data = [time.time(), tmp]
+
+				dataPik = cPickle.dumps(data)
+
+				calSz = calset.shape[0]
+				calset.resize([calSz+1, 1])
+				calset[calSz,...] = dataPik
+
+				log.info("Status message - %s.", tmp)
+				log.info("StatusTable size = %s", calset.shape)
 			else:
 				log.error("WAT? Unknown packet!")
 				log.error(tmp)
@@ -84,8 +92,9 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 
 			dat = np.concatenate(([time.time()], arr))
 
-			dset.resize(dset.shape[0]+1, axis=0)
-			dset[dset.shape[0]-1,:] = dat
+			curSize = dset.shape[0]
+			dset.resize(curSize+1, axis=0)
+			dset[curSize,:] = dat
 
 			out.flush()  # FLush early, flush often
 			# Probably a bad idea without a SSD

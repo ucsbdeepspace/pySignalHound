@@ -18,6 +18,7 @@
 # TODO: Respin lots of the messy if: elif: else: statements into a dictionary lookup
 
 import ctypes as ct
+from ctypes import wintypes as wt
 import bb_api_h as hf
 
 import logging
@@ -76,7 +77,15 @@ class SignalHound(object):
 		self.devOpen = False
 
 		self.log.info("Opening DLL")
-		self.dll = ct.WinDLL ("bb_api.dll")
+		self.dll = ct.CDLL ("bb_api.dll")
+
+		# This is horrible ctypes DLL hackery
+		# You need to access the internal DLL handle to properly force windows to close the dll handle, which
+		# is the only way to COMPLETELY close the device interface.
+
+		# It's needed if you ever want to completely close the device, to re-initialize the device interface.
+		# ctypes doesn't make manually deallocating a dll easy.
+		self.dllHandle = wt.HMODULE(self.dll._handle)
 
 		self.cRawSweepCallbackFunc = None
 
@@ -84,9 +93,14 @@ class SignalHound(object):
 
 		self.acq_conf = {}
 
+		self.sequentialADCErrors = 0
+
 	def __del__(self):
 		self.log.info("Deleting SignalHound Interface Class")
+		self.forceClose()
 
+	def forceClose(self):
+		self.log.info("Force Closing.")
 		if self.devOpen:
 			self.closeDevice()
 
@@ -101,8 +115,10 @@ class SignalHound(object):
 		# rely on it happening automatically
 		self.log.info("Forcing DLL handle closed")
 		try:
-			ct.windll.kernel32.FreeLibrary(self.dll._handle)
-		except ct.ArgumentError:
+			ct.windll.kernel32.FreeLibrary(self.dllHandle)
+		except ct.ArgumentError as e:
+			self.log.warning("Argument error in forcing DLL closed")
+			self.log.warning("%s", e)
 			pass
 
 
@@ -128,6 +144,13 @@ class SignalHound(object):
 
 	def closeDevice(self):
 		self.log.info("Closing Device with handle num: %s", self.deviceHandle.value)
+		try:
+			self.dll.bbAbort(self.deviceHandle)
+			self.log.info("Running acquistion aborted.")
+		except Error as e:
+			self.log.info("Could not abort acquisition: %s", e)
+
+
 		ret = self.dll.bbCloseDevice(self.deviceHandle)
 
 		if ret != hf.bbNoError:
@@ -1115,7 +1138,13 @@ class SignalHound(object):
 		elif err == self.bbStatus["bbADCOverflow"]:
 			self.log.warning("Clipping is common on the first acquitition cycle, presumably due to the IF stages settling.")
 			self.log.warning("This error is only a problem if it occurs more then once and not at the immediate start of an acquisition, or immediately following a recalibration.")
-			raise IOError("The ADC has detected clipping of the input signal!")
+			self.sequentialADCErrors += 1
+
+			# Only throw an actual error if we've been clipping for a while.
+			# This way, transients won't break things (as fast, in any event).
+			if self.sequentialADCErrors > 10:
+				raise IOError("The ADC has detected clipping of the input signal!")
+
 		elif err == self.bbStatus["bbNoTriggerFound"]:
 			raise IOError('''In time-gated analysis, if the spectrum returned is not representative of
 				the gate specified, this warning is returned.
@@ -1137,6 +1166,8 @@ class SignalHound(object):
 			"max" : maxData,
 			"min" : minData
 		}
+
+		self.sequentialADCErrors = 0  # There was no clipping, so reset the clipping integrator
 
 		return ret
 
