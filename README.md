@@ -38,7 +38,7 @@ The ability to configure some of the test-modes is also a good idea, though it a
 
 `spectraLog.py` is the script that is why I wrote the API in the first place. It does long-duration (days!) spectrum logging for site-survey purposes and analysis. It is a fully-multi-process tool that does on-the-fly averaging of the incoming data-stream to reduce disk load.
 
-Mote: `spectraLog.py` is aggressively multi-process, and you **must** stop it by typing "q" + \[enter\], to properly signal all the running processes to exit. A typical Ctrl+C will just signal the process attached to the console to exit, but due to a quirk in the `multiprocessing` module, I cannot properly install a signal handler to catch the Ctrl+C in a proper manner. Yes, this is irritating. I will probably look at solving it eventually.
+Note: `spectraLog.py` is aggressively multi-process, and you **must** stop it by typing "q" + \[enter\], to properly signal all the running processes to exit. A typical Ctrl+C will just signal the process attached to the console to exit, but due to a quirk in the `multiprocessing` module, I cannot properly install a signal handler to catch the Ctrl+C in a proper manner. Yes, this is irritating. I will probably look at solving it eventually.
 
 
 ---
