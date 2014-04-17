@@ -25,7 +25,7 @@ The primary API file is `SignalHound.py`.
 
 `tests.py` is a good proof-of-concept demo. It's currently messy, but it shows the capabilities of both python and the SignalHound.
 
- - `python tests.py radio` will do real-time software decoding and playback of FM radio.
+ - `python tests.py radio {frequency-in-hz}` will do real-time software decoding and playback of FM radio.
  - `python tests.py raw-pipe` will log the full-rate 160 MBPS data-stream to disk in real-time (requires a SSD).
  - `python tests.py callback` demonstrates the ability to have the C api callback into pure python code
 
