@@ -37,7 +37,7 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 	loop_timer = time.time()
 
 	logName = time.strftime("Datalog - %Y %m %d, %a, %H-%M-%S.h5", time.localtime())
-	logPath = time.strftime("./Data/%Y/%m/%d/", time.localtime())
+	logPath = time.strftime("../Data/%Y/%m/%d/", time.localtime())
 
 	if not os.path.exists(logPath):
 		os.makedirs(logPath)
@@ -57,7 +57,9 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 	items = []
 	while 1:
 
-		if not dataQueue.empty():
+		if dataQueue.empty():
+			time.sleep(0.005)
+		else:
 
 			tmp = dataQueue.get()
 
@@ -110,6 +112,7 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 		if ctrlNs.acqRunning == False:
 			log.info("Stopping Sweep-thread!")
 			break
+
 
 	out.close()
 

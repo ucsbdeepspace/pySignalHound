@@ -80,7 +80,7 @@ def testRawPipeMode(sh):
 	sh.configureIO("dc", "int-ref-out", "out-logic-low")
 	sh.configureDemod("fm", 92.9e6, 250e3, 12e3, 20, 50)
 
-	sh.configureRawSweep(100, 8, 2)
+	sh.configureRawSweep(100, 1, 16)
 
 	# sh.initiate("raw-sweep-loop", 0)
 	sh.initiate("raw-pipe", "20-mhz")
@@ -103,7 +103,7 @@ def testRawPipeMode(sh):
 	try:
 		while 1:
 			try:
-				DATA_LOG.append(sh.fetchRaw())
+				DATA_LOG.append(sh.fetchRaw_s())
 			except IOError:
 
 				print "ioerror"

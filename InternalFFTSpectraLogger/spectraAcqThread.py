@@ -15,12 +15,11 @@
 #  * ----------------------------------------------------------------------------
 #
 
-
+import sys
 import logSetup
 import logging
 import time
 import traceback
-
 
 H_FLIP_FREQ            = 1.420405751786e9
 
@@ -46,10 +45,10 @@ ACQ_UNITS              = "power"
 ACQ_MODE               = "average"
 ACQ_Y_SCALE            = "log-scale"
 
-PRINT_LOOP_CNT         = 100
+PRINT_LOOP_CNT         = 300
 CAL_CHK_LOOP_CNT       = 5000
 
-def startAcquisition(sh, dataQueue):
+def startAcquisition(sh, rawDataQueue):
 
 	sh.configureAcquisition(ACQ_MODE, ACQ_Y_SCALE)
 	sh.configureCenterSpan(center = ACQ_FREQ, span = ACQ_SPAN)
@@ -62,12 +61,14 @@ def startAcquisition(sh, dataQueue):
 	# sh.configureIO("dc", "int-ref-out", "out-logic-low")
 	# sh.configureDemod("fm", 102.3e6, 250e3, 12e3, 20, 50)
 
-	# sh.configureRawSweep(100, 8, 2)
-	sh.initiate(mode = "real-time", flag = "ignored")
+	sh.configureRawSweep(1420, 1, 16)
+	# sh.initiate(mode = "real-time", flag = "ignored")
+	sh.initiate("raw-pipe", "20-mhz")
 
-	dataQueue.put({"settings" : sh.getCurrentAcquisitionSettings()})
+	rawDataQueue.put({"settings" : sh.getCurrentAcquisitionSettings()})
 
-def sweepSource(dataQueue, ctrlNs, printQueue):
+def sweepSource(rawDataQueue, ctrlNs, printQueue):
+
 
 
 	from SignalHound import SignalHound
@@ -78,22 +79,22 @@ def sweepSource(dataQueue, ctrlNs, printQueue):
 	log = logging.getLogger("Main.AcqProcess")
 
 	loop_timer = time.time()
-	loops = 0
+	seq_num = 0
 
 	sh = SignalHound()
-	startAcquisition(sh, dataQueue)
+	startAcquisition(sh, rawDataQueue)
 
 
 	temperature = sh.queryDeviceDiagnostics()["temperature"]
 
-	while 1:
+	while ctrlNs.run:
 		try:
-			dataQueue.put(sh.fetchTrace())
+			rawDataQueue.put({"data" : (seq_num, sh.fetchRaw_s())})
 		except Exception:
 			log.error("IOError in Acquisition Thread!")
 			log.error(traceback.format_exc())
 
-			dataQueue.put({"status" : "Error: Device interface crashed. Reinitializing"})
+			rawDataQueue.put({"status" : "Error: Device interface crashed. Reinitializing"})
 			log.error("Resetting hardware!")
 			# sh.preset()
 			sh.forceClose()
@@ -107,34 +108,32 @@ def sweepSource(dataQueue, ctrlNs, printQueue):
 			log.error("Hardware shut down, completely re-initializing device interface!")
 			# sys.exit()
 			sh = SignalHound()
-			startAcquisition(sh, dataQueue)
+			startAcquisition(sh, rawDataQueue)
 
-		if loops % PRINT_LOOP_CNT == 0:
+		if seq_num % PRINT_LOOP_CNT == 0:
 			now = time.time()
 			delta = now-loop_timer
-			freq = 1 / (delta / PRINT_LOOP_CNT)
+			updateInterval = delta / PRINT_LOOP_CNT
+			freq = 1 / updateInterval
 			log.info("Elapsed Time = %0.5f, Frequency = %s", delta, freq)
 			loop_timer = now
 
-		if loops % CAL_CHK_LOOP_CNT == 0:
+		if seq_num % CAL_CHK_LOOP_CNT == 0:
 			diags = sh.queryDeviceDiagnostics()
-			dataQueue.put({"status" : diags})
+			rawDataQueue.put({"status" : diags})
 
 			temptmp = diags["temperature"]
 			if abs(temperature - temptmp) > 2.0:    # Temperature deviations of > 2° cause IF shifts. Therefore, we do a re-cal if they're detected
-				dataQueue.put({"status" : "Recalibrating IF"})
+				rawDataQueue.put({"status" : "Recalibrating IF"})
 				sh.selfCal()
-				startAcquisition(sh, dataQueue)
+				startAcquisition(sh, rawDataQueue)
 				log.warning("Temperature changed > 2.0 C. Delta is %f. Recalibrated!", abs(temperature - temptmp))
 				temperature = temptmp
 			else:
 				log.info("Temperature deviation = %f. Not doing recal, since drift < 2C", abs(temperature - temptmp))
 
-		loops += 1
+		seq_num += 1
 
-		if ctrlNs.run == False:
-			log.info("Stopping Sweep-thread!")
-			break
 
 
 	sh.abort()
@@ -144,9 +143,5 @@ def sweepSource(dataQueue, ctrlNs, printQueue):
 
 	ctrlNs.acqRunning = False
 
-	while not dataQueue.empty():
-		dataQueue.get()
 
-	log.info("Sweep-thread exiting!")
-	dataQueue.close()
-	dataQueue.join_thread()
+	log.info("Acquisition-thread exiting!")

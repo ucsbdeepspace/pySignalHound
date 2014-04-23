@@ -18,6 +18,7 @@
 # TODO: Respin lots of the messy if: elif: else: statements into a dictionary lookup
 
 import ctypes as ct
+import ctypes.util as ctu
 from ctypes import wintypes as wt
 import bb_api_h as hf
 
@@ -27,6 +28,8 @@ import logging
 
 import numpy as np
 from numpy.core.multiarray import int_asbuffer
+import os.path
+
 
 class SignalHound(object):
 
@@ -77,7 +80,21 @@ class SignalHound(object):
 		self.devOpen = False
 
 		self.log.info("Opening DLL")
-		self.dll = ct.CDLL ("bb_api.dll")
+		libPath = ctu.find_library("bb_api.dll")
+
+		if not libPath:
+			if os.path.exists("bb_api.dll"):  # This is a messy hack, but it makes imports work with my scripts. I should
+												# Really put the signal hound DLL on my $PATH, but whatever
+				libPath = "bb_api.dll"
+			elif os.path.exists("../bb_api.dll"):
+				libPath = "../bb_api.dll"
+			else:
+				self.log.error("Could not locate signal hound DLL.")
+				raise EnvironmentError("Required DLL not available on system PATH")
+
+
+		self.log.info("Found dll located at %s", libPath)
+		self.dll = ct.CDLL (libPath)
 
 		# This is horrible ctypes DLL hackery
 		# You need to access the internal DLL handle to properly force windows to close the dll handle, which
@@ -796,7 +813,7 @@ class SignalHound(object):
 		if (ppf * steps) % 16 != 0:
 			raise ValueError("(ppf * steps) must be a multiple of 16")
 
-		if start + (steps *20) > 6000:
+		if start + (steps * 20) > 6000:
 			raise ValueError("The final center frequency, obtained by the equation (start + steps*20), cannot be greater than 6000 (6 GHz).")
 
 
@@ -1126,6 +1143,8 @@ class SignalHound(object):
 
 		if err == self.bbStatus["bbNoError"]:
 			# self.log.info("Call to fetchTrace succeeded.")  # Commented out because it was NOISY
+
+			self.sequentialADCErrors = 0  # There was no clipping, so reset the clipping integrator
 			pass
 		elif err == self.bbStatus["bbNullPtrErr"]:
 			raise IOError("Null pointer error!")
@@ -1143,7 +1162,7 @@ class SignalHound(object):
 			# Only throw an actual error if we've been clipping for a while.
 			# This way, transients won't break things (as fast, in any event).
 			if self.sequentialADCErrors > 10:
-				raise IOError("The ADC has detected clipping of the input signal!")
+				raise IOError("The ADC has detected clipping of the input signal for more then 10 sequential samples!")
 
 		elif err == self.bbStatus["bbNoTriggerFound"]:
 			raise IOError('''In time-gated analysis, if the spectrum returned is not representative of
@@ -1167,7 +1186,7 @@ class SignalHound(object):
 			"min" : minData
 		}
 
-		self.sequentialADCErrors = 0  # There was no clipping, so reset the clipping integrator
+
 
 		return ret
 
@@ -1335,7 +1354,8 @@ class SignalHound(object):
 		err = self.dll.bbFetchRaw(self.deviceHandle, rawBufPtr, triggersPtr)
 
 		if err == self.bbStatus["bbNoError"]:
-			pass  # No print statements here. Too noisy
+			self.sequentialADCErrors = 0  # There was no clipping, so reset the clipping integrator
+			# No print statements here. Too noisy
 
 		elif err == self.bbStatus["bbNullPtrErr"]:
 			raise IOError("Null pointer error!")
@@ -1344,7 +1364,13 @@ class SignalHound(object):
 		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
 			raise IOError("Device not Configured!")
 		elif err == self.bbStatus["bbADCOverflow"]:
-			raise IOError("The ADC has detected clipping of the input signal!")
+			self.sequentialADCErrors += 1
+
+			# Only throw an actual error if we've been clipping for a while.
+			# This way, transients won't break things (as fast, in any event).
+			if self.sequentialADCErrors > 10:
+				raise IOError("The ADC has detected clipping of the input signal for more then 10 sequential samples!")
+
 		elif err == self.bbStatus["bbPacketFramingErr"]:
 			raise IOError("Data loss or miscommunication has occurred between the device and the API!")
 		elif err == self.bbStatus["bbDeviceConnectionErr"]:
@@ -1353,7 +1379,7 @@ class SignalHound(object):
 			raise IOError("Unknown error setting fetchRaw! Error = %s" % err)
 
 
-		data = SignalHound.fastDecodeArray(rawBuf, arraySize, np.short)
+		data = SignalHound.fastDecodeArray(rawBuf, arraySize, np.float32)
 		triggers = SignalHound.fastDecodeArray(triggers, triggerArraySize, np.int32)
 
 		ret = {
@@ -1377,10 +1403,11 @@ class SignalHound(object):
 		triggers = (ct.c_int * triggerArraySize)(0)
 		triggersPtr = ct.pointer(triggers)
 
-		err = self.dll.bbFetchRaw(self.deviceHandle, rawBufPtr, triggersPtr)
+		err = self.dll.bbFetchRaw_s(self.deviceHandle, rawBufPtr, triggersPtr)
 
 		if err == self.bbStatus["bbNoError"]:
-			pass  # No print statements here. Too noisy
+			self.sequentialADCErrors = 0
+			# No print statements here. Too noisy
 
 		elif err == self.bbStatus["bbNullPtrErr"]:
 			raise IOError("Null pointer error!")
@@ -1389,7 +1416,14 @@ class SignalHound(object):
 		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
 			raise IOError("Device not Configured!")
 		elif err == self.bbStatus["bbADCOverflow"]:
-			raise IOError("The ADC has detected clipping of the input signal!")
+			self.sequentialADCErrors += 1
+
+			# Only throw an actual error if we've been clipping for a while.
+			# This way, transients won't break things (as fast, in any event).
+			if self.sequentialADCErrors > 10:
+				raise IOError("The ADC has detected clipping of the input signal for more then 10 sequential samples!")
+
+
 		elif err == self.bbStatus["bbPacketFramingErr"]:
 			raise IOError("Data loss or miscommunication has occurred between the device and the API!")
 		elif err == self.bbStatus["bbDeviceConnectionErr"]:
