@@ -43,15 +43,18 @@ import spectraAcqThread
 import spectraLogThread
 import fftWorker
 import printThread
-
-FFT_PROCESSES = 3
+import sharedMemRingBuf
+from SignalHound import SignalHound
+import numpy as np
+import ctypes as ct
+FFT_PROCESSES = 8
 
 def go():
 
+	print("startup")
 
 
-
-	rawDataQueue = mp.Queue()
+	statusMessageQueue = mp.Queue()
 	fftDataQueue = mp.Queue()
 	printQueue = mp.Queue()
 	ctrlManager = mp.Manager()
@@ -67,21 +70,34 @@ def go():
 	ctrlNs.printerRun = True
 	ctrlNs.stopped = False
 
-
-	acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="SweepThread", args=(rawDataQueue, ctrlNs, printQueue))
-	acqProc.start()
-
-	logProc = mp.Process(target=spectraLogThread.logSweeps, name="LogThread", args=(fftDataQueue, ctrlNs, printQueue))
-	logProc.start()
-
-	fftWorkerPool = mp.Pool(processes=FFT_PROCESSES, initializer=fftWorker.fftWorker, initargs=(rawDataQueue, fftDataQueue, ctrlNs, printQueue))
-
 	# A separate process for printing, which allows nice easy non-blocking printing.
 	printProc = mp.Process(target=printThread.printer, name="PrintFormatterThread", args=(printQueue, ctrlNs))
 	printProc.daemon = True
 	printProc.start()
 
-	print("Living children =", )
+
+	rawDataRingBuf = sharedMemRingBuf.SharedMemRingBuf(10000, *SignalHound.getRawSweep_s_size())
+
+	# 32769 =fftChunkSize//2 + 1 (fftChunkSize = 2**16). Values are a complex64, which is really 2 32 bit floats
+	fftDataRingBuf = sharedMemRingBuf.SharedMemRingBuf(10000, ct.c_float, 32769*2)
+
+	print(rawDataRingBuf)
+
+	fftWorkerPool = mp.Pool(processes=FFT_PROCESSES, initializer=fftWorker.fftWorker, initargs=(ctrlNs, printQueue, rawDataRingBuf, fftDataRingBuf))
+
+
+	acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="SweepThread", args=(statusMessageQueue, ctrlNs, printQueue, rawDataRingBuf))
+
+
+	logProc = mp.Process(target=spectraLogThread.logSweeps, name="LogThread", args=(statusMessageQueue, fftDataRingBuf, ctrlNs, printQueue))
+
+	log.info("Waiting while worker-processes perform initialization")
+	time.sleep(5)
+	acqProc.start()
+	logProc.start()
+
+
+
 
 	try:
 		while 1:
@@ -112,10 +128,6 @@ def go():
 	# - - -
 	# this was a fucking nightmare to track down.
 	log.info("Waiting for acquisition thread to halt.")
-	while acqProc.is_alive():
-		if not rawDataQueue.empty():
-			rawDataQueue.get()
-
 	acqProc.join()
 
 	log.info("Acquisition thread halted.")

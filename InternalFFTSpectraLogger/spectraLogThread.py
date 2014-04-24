@@ -31,7 +31,7 @@ NUM_AVERAGE = 1000
 
 NO_WRITE_MODE = True
 
-def logSweeps(fftDataQueue, ctrlNs, printQueue):
+def logSweeps(statusMessageQueue, fftDataRingBuf, ctrlNs, printQueue):
 
 
 	log = logging.getLogger("Main.LogProcess")
@@ -64,12 +64,22 @@ def logSweeps(fftDataQueue, ctrlNs, printQueue):
 	loopCounter = 0
 	while ctrlNs.procRunning:
 
-		if fftDataQueue.empty():
+		if statusMessageQueue.empty() and fftDataRingBuf.getItemsNum() == 0:
 			time.sleep(0.005)
 		else:
 			loopCounter += 1
-			tmp = fftDataQueue.get()
-			if not NO_WRITE_MODE:
+
+			if NO_WRITE_MODE:
+				if not statusMessageQueue.empty():
+					statusMessageQueue.get()
+
+				if not fftDataRingBuf.getItemsNum() == 0:
+					ret = fftDataRingBuf.getOldest()
+					if ret != False:
+						pass
+
+			else:
+				tmp = statusMessageQueue.get()
 				if "max" in tmp:
 					items.append(tmp["max"])
 				elif "settings" in tmp or "status" in tmp:
@@ -116,8 +126,10 @@ def logSweeps(fftDataQueue, ctrlNs, printQueue):
 				updateInterval = delta / loopCounter
 				freq = 1 / updateInterval
 				log.info("Elapsed Time = %0.5f, Frequency = %s", delta, freq)
+				log.info("Processed FFT queue size = %s", fftDataRingBuf.getItemsNum())
 				loop_timer = now
 				loopCounter = 0
+
 
 
 	if not NO_WRITE_MODE:

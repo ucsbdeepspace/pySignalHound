@@ -111,16 +111,6 @@ class RobustFileHandler(logging.FileHandler):
 		self.close()
 
 
-def exceptHook(exc_type, exc_value, exc_traceback):
-	if issubclass(exc_type, KeyboardInterrupt):
-		sys.__excepthook__(exc_type, exc_value, exc_traceback)
-		return
-	mainLogger = logging.getLogger("Main")                  # Main logger
-	mainLogger.critical('Uncaught exception!')
-	mainLogger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
-
-
-
 def initLogging(logLevel=logging.INFO, printQ = None):
 	print "Setting up loggers....",
 
@@ -138,7 +128,5 @@ def initLogging(logLevel=logging.INFO, printQ = None):
 
 	mainLogger.addHandler(errLogHandler)
 
-	# Install override for excepthook, to catch all errors
-	sys.excepthook = exceptHook
 
 	print "done"

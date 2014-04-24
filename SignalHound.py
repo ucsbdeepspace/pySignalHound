@@ -73,6 +73,8 @@ class SignalHound(object):
 		"bbNoTriggerFound"             : 3
 	}
 
+	rawSweepArrSize = 299008
+	rawSweepTriggerArraySize = 68
 
 	def __init__(self):
 
@@ -1299,7 +1301,7 @@ class SignalHound(object):
 
 		return ret
 
-	def fetchRaw(self):
+	def fetchRaw(self, ctDataBufPtr=None, ctTrigBufPtr=None):
 		# BB_API bbStatus bbFetchRaw(int device, float *buffer, int *triggers);
 
 		# device  Handle of a streaming device.
@@ -1341,15 +1343,22 @@ class SignalHound(object):
 		# The values returned are in the time domain and are uncorrected. (See bbFetchRawCorrections() for
 		# information on making amplitude corrections on the raw data)
 
+		# If you pass ctDataBufPtr or ctTrigBufPtr, the data will be written into the passed ctypes array that is pointed to by the passed pointer,
+		# rather then allocating a local ctypes array, and decoding the returned data into a numpy array before returning
+		# You can get the size of the buffer by calling getRawSweep_size(), getRawSweep_s_size() and getRawSweepTrig_size()
 
+		if not ctDataBufPtr:
+			rawBuf = (ct.c_float * self.rawSweepArrSize)()
+			rawBufPtr = ct.pointer(rawBuf)
+		else:
+			rawBufPtr = ctDataBufPtr
 
-		arraySize = 299008
-		rawBuf = (ct.c_float * arraySize)()
-		rawBufPtr = ct.pointer(rawBuf)
+		if not ctTrigBufPtr:
+			triggers = (ct.c_int * self.rawSweepTriggerArraySize)(0)
+			triggersPtr = ct.pointer(triggers)
+		else:
+			triggersPtr = ctTrigBufPtr
 
-		triggerArraySize = 68
-		triggers = (ct.c_int * triggerArraySize)(0)
-		triggersPtr = ct.pointer(triggers)
 
 		err = self.dll.bbFetchRaw(self.deviceHandle, rawBufPtr, triggersPtr)
 
@@ -1378,30 +1387,36 @@ class SignalHound(object):
 		else:
 			raise IOError("Unknown error setting fetchRaw! Error = %s" % err)
 
+		ret = {}
 
-		data = SignalHound.fastDecodeArray(rawBuf, arraySize, np.float32)
-		triggers = SignalHound.fastDecodeArray(triggers, triggerArraySize, np.int32)
+		if not ctDataBufPtr:
+			ret["data"] = SignalHound.fastDecodeArray(rawBuf, self.rawSweepArrSize, np.float32)
 
-		ret = {
-			"data" : data,
-			"triggers" : triggers
-		}
+		if not ctTrigBufPtr:
+			ret["triggers"] = SignalHound.fastDecodeArray(triggers, self.rawSweepTriggerArraySize, np.int32)
+
 
 		return ret
 
-	def fetchRaw_s(self):
+	def fetchRaw_s(self, ctDataBufPtr=None, ctTrigBufPtr=None):
 		# BB_API bbStatus bbFetchRaw_s(int device, short *buffer, int *triggers);
 
 		# This is functionally identical to fetchRaw, only it returns an array of shorts, rather then floats.
 
 
-		arraySize = 299008
-		rawBuf = (ct.c_short * arraySize)()
-		rawBufPtr = ct.pointer(rawBuf)
+		if not ctDataBufPtr:
+			rawBuf = (ct.c_short * self.rawSweepArrSize)()
+			rawBufPtr = ct.pointer(rawBuf)
+		else:
+			rawBufPtr = ctDataBufPtr
 
-		triggerArraySize = 68
-		triggers = (ct.c_int * triggerArraySize)(0)
-		triggersPtr = ct.pointer(triggers)
+		if not ctTrigBufPtr:
+			triggers = (ct.c_int * self.rawSweepTriggerArraySize)(0)
+			triggersPtr = ct.pointer(triggers)
+		else:
+			triggersPtr = ctTrigBufPtr
+
+
 
 		err = self.dll.bbFetchRaw_s(self.deviceHandle, rawBufPtr, triggersPtr)
 
@@ -1432,15 +1447,31 @@ class SignalHound(object):
 			raise IOError("Unknown error setting fetchRaw_s! Error = %s" % err)
 
 
-		data = SignalHound.fastDecodeArray(rawBuf, arraySize, np.short)
-		triggers = SignalHound.fastDecodeArray(triggers, triggerArraySize, np.int32)
+		ret = {}
 
-		ret = {
-			"data" : data,
-			"triggers" : triggers
-		}
+		if not ctDataBufPtr:
+			ret["data"] = SignalHound.fastDecodeArray(rawBuf, self.rawSweepArrSize, np.short)
+
+		if not ctTrigBufPtr:
+			ret["triggers"] = SignalHound.fastDecodeArray(triggers, self.rawSweepTriggerArraySize, np.int32)
+
 
 		return ret
+
+	@classmethod
+	def getRawSweep_size(cls):
+		return ct.c_float, cls.rawSweepArrSize
+
+	@classmethod
+	def getRawSweep_s_size(cls):
+		return ct.c_short, cls.rawSweepArrSize
+
+	@classmethod
+	def getRawSweepTrig_size(cls):
+		return ct.c_int, cls.rawSweepTriggerArraySize
+
+
+
 
 	def fetchRawSweep(self):
 		# BB_API bbStatus bbFetchRawSweep(int device, short *buffer);

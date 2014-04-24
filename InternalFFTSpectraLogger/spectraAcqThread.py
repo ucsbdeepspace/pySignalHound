@@ -48,7 +48,7 @@ ACQ_Y_SCALE            = "log-scale"
 PRINT_LOOP_CNT         = 300
 CAL_CHK_LOOP_CNT       = 5000
 
-def startAcquisition(sh, rawDataQueue):
+def startAcquisition(sh, statusMessageQueue):
 
 	sh.configureAcquisition(ACQ_MODE, ACQ_Y_SCALE)
 	sh.configureCenterSpan(center = ACQ_FREQ, span = ACQ_SPAN)
@@ -65,9 +65,9 @@ def startAcquisition(sh, rawDataQueue):
 	# sh.initiate(mode = "real-time", flag = "ignored")
 	sh.initiate("raw-pipe", "20-mhz")
 
-	rawDataQueue.put({"settings" : sh.getCurrentAcquisitionSettings()})
+	statusMessageQueue.put({"settings" : (time.time(), sh.getCurrentAcquisitionSettings())})
 
-def sweepSource(rawDataQueue, ctrlNs, printQueue):
+def sweepSource(statusMessageQueue, ctrlNs, printQueue, ringBuf):
 
 
 
@@ -82,19 +82,20 @@ def sweepSource(rawDataQueue, ctrlNs, printQueue):
 	seq_num = 0
 
 	sh = SignalHound()
-	startAcquisition(sh, rawDataQueue)
+	startAcquisition(sh, statusMessageQueue)
 
 
 	temperature = sh.queryDeviceDiagnostics()["temperature"]
 
 	while ctrlNs.run:
+		bufPtr, lock = ringBuf.getAddPointer()
 		try:
-			rawDataQueue.put({"data" : (seq_num, sh.fetchRaw_s())})
+			sh.fetchRaw_s(ctDataBufPtr=bufPtr)
 		except Exception:
 			log.error("IOError in Acquisition Thread!")
 			log.error(traceback.format_exc())
 
-			rawDataQueue.put({"status" : "Error: Device interface crashed. Reinitializing"})
+			statusMessageQueue.put({"status" : (time.time(), "Error: Device interface crashed. Reinitializing")})
 			log.error("Resetting hardware!")
 			# sh.preset()
 			sh.forceClose()
@@ -108,25 +109,29 @@ def sweepSource(rawDataQueue, ctrlNs, printQueue):
 			log.error("Hardware shut down, completely re-initializing device interface!")
 			# sys.exit()
 			sh = SignalHound()
-			startAcquisition(sh, rawDataQueue)
+			startAcquisition(sh, statusMessageQueue)
+		finally:
+			lock.release()
 
 		if seq_num % PRINT_LOOP_CNT == 0:
 			now = time.time()
 			delta = now-loop_timer
 			updateInterval = delta / PRINT_LOOP_CNT
 			freq = 1 / updateInterval
-			log.info("Elapsed Time = %0.5f, Frequency = %s", delta, freq)
+			log.info("Elapsed Time = %0.5f, Frequency = %s. Items in buffer = %s", delta, freq, ringBuf.getItemsNum())
 			loop_timer = now
+
+			# print
 
 		if seq_num % CAL_CHK_LOOP_CNT == 0:
 			diags = sh.queryDeviceDiagnostics()
-			rawDataQueue.put({"status" : diags})
+			statusMessageQueue.put({"status" : (time.time(), diags)})
 
 			temptmp = diags["temperature"]
 			if abs(temperature - temptmp) > 2.0:    # Temperature deviations of > 2° cause IF shifts. Therefore, we do a re-cal if they're detected
-				rawDataQueue.put({"status" : "Recalibrating IF"})
+				statusMessageQueue.put({"status" : (time.time(), "Recalibrating IF due to temperature change")})
 				sh.selfCal()
-				startAcquisition(sh, rawDataQueue)
+				startAcquisition(sh, statusMessageQueue)
 				log.warning("Temperature changed > 2.0 C. Delta is %f. Recalibrated!", abs(temperature - temptmp))
 				temperature = temptmp
 			else:

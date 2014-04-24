@@ -22,9 +22,10 @@ import time
 import sys
 import pyfftw
 import numpy as np
+from SignalHound import SignalHound
 
 
-def fftWorker(rawDataQueue, fftDataQueue, ctrlNs, printQueue):
+def fftWorker(ctrlNs, printQueue, rawDataRingBuf, fftDataRingBuf):
 
 	log = logging.getLogger("Main.FFTWorker")
 	logSetup.initLogging(printQ = printQueue)
@@ -33,35 +34,58 @@ def fftWorker(rawDataQueue, fftDataQueue, ctrlNs, printQueue):
 	log.info("FFT Worker Starting up")
 
 	loopCounter = 0
+	fftChunkSize = 2**16
+	outputSize = fftChunkSize//2 + 1
+	chunksPerAcq = int(SignalHound.rawSweepArrSize/fftChunkSize)
+	overlap = 4
+	window = np.hamming(fftChunkSize)
+	inArr = pyfftw.n_byte_align_empty(fftChunkSize, 16, dtype=np.float32)
+	outArr = pyfftw.n_byte_align_empty(outputSize, 16, dtype=np.complex64)
+
+	log.info("Choosing maximally optimized transform")
+	fftFunc = pyfftw.FFTW(inArr, outArr, flags=('FFTW_PATIENT', "FFTW_DESTROY_INPUT"))
+	log.info("Optimized transform selected. Run starting")
 
 	while ctrlNs.acqRunning:
 
 
-		if not rawDataQueue.empty():
-
+		ret = rawDataRingBuf.getOldest()
+		if ret != False:
+			rawDataBuf, retreiveLock = ret
 			loopCounter += 1
-			tmp = rawDataQueue.get()
-			if "data" in tmp:
-				seqNum, dataDict = tmp["data"]
-				samples, triggers = dataDict["data"], dataDict["triggers"]
-				# print(len(samples))
-				# samples = fft.fft(samples)
-				# print "Doing FFT", seqNum
+			# this immediate lock release is *probably* a bad idea, but as long as the buffer doesn't get almost entirely full, it should be OK.
+			# It will also prevent blockages in the output buffer from propigating back to the input buffer.
+			retreiveLock.release()
+			# seqNum, dataDict = tmp["data"]
+			# samples, triggers = dataDict["data"], dataDict["triggers"]
+			# print(len(samples))
+			# samples = fft.fft(samples)
+			# print "Doing FFT", seqNum
 
-				x = 0
-				ret = []
-				while x < 9:
-					tmpArr = pyfftw.n_byte_align_empty(2**14, 16, dtype=np.float)
-					tmpArr = samples[x*(2**14):(x+1)*(2**14)]
-					ret.append(pyfftw.interfaces.numpy_fft.fft(tmpArr))
-					x += 1
-				# print("Dtype = ", samples.dtype)
-				# print "FFT", seqNum, "done"
+			samples = SignalHound.fastDecodeArray(rawDataBuf, SignalHound.rawSweepArrSize, np.short)
 
-				fftDataQueue.put({"data" : (seqNum, {"data" : ret, "triggers" : triggers})})
 
-			else:
-				fftDataQueue.put(tmp)
+			for x in range(chunksPerAcq*overlap-1):
+				# Create byte-aligned array for efficent FFT, and copy the data we're interested into it.
+
+				rets = pyfftw.n_byte_align_empty(outputSize, 16, dtype=np.complex64)
+				dat = samples[x*(fftChunkSize/overlap):(x*(fftChunkSize/overlap))+fftChunkSize] * window
+				fftFunc(dat, rets)
+				fftArr = fftFunc.get_output_array()
+				# # log.warning("Buf = %s, arrSize = %s, dtype=%s, as floats = %s", processedDataBuf, fftArr.shape, fftArr.dtype, fftArr.view(dtype=np.float32).shape)
+				try:
+
+					processedDataBuf, addLock = fftDataRingBuf.getAddArray()
+					processedDataBuf[:] = fftArr.view(dtype=np.float32)
+				finally:
+
+					addLock.release()
+
+				x += 1
+
+
+			# fftDataQueue.put({"data" : ret})
+
 
 
 			now = time.time()
@@ -76,14 +100,5 @@ def fftWorker(rawDataQueue, fftDataQueue, ctrlNs, printQueue):
 		time.sleep(0.001)
 
 
-	log.info("FFT Worker Recieved halt signal. Flushing queues!")
-	while not rawDataQueue.empty():
-		rawDataQueue.get()
-
-	fftDataQueue.close()
-	fftDataQueue.join_thread()
-
-
-
-	log.info("FFT Worker exiting!")
+	log.info("FFT Worker Recieved halt signal, FFT Worker exiting!")
 	sys.exit()
