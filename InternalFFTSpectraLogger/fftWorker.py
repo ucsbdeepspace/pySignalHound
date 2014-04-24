@@ -25,34 +25,66 @@ import numpy as np
 from SignalHound import SignalHound
 
 
-def fftWorker(ctrlNs, printQueue, rawDataRingBuf, fftDataRingBuf):
-
-	log = logging.getLogger("Main.FFTWorker")
-	logSetup.initLogging(printQ = printQueue)
-	loop_timer = time.time()
-
-	log.info("FFT Worker Starting up")
-
-	loopCounter = 0
-	fftChunkSize = 2**16
-	outputSize = fftChunkSize//2 + 1
-	chunksPerAcq = int(SignalHound.rawSweepArrSize/fftChunkSize)
-	overlap = 4
-	window = np.hamming(fftChunkSize)
-	inArr = pyfftw.n_byte_align_empty(fftChunkSize, 16, dtype=np.float32)
-	outArr = pyfftw.n_byte_align_empty(outputSize, 16, dtype=np.complex64)
-
-	log.info("Choosing maximally optimized transform")
-	fftFunc = pyfftw.FFTW(inArr, outArr, flags=('FFTW_PATIENT', "FFTW_DESTROY_INPUT"))
-	log.info("Optimized transform selected. Run starting")
-
-	while ctrlNs.acqRunning:
+class FFTWorker(object):
 
 
-		ret = rawDataRingBuf.getOldest()
+	def __init__(self, ctrlNs, printQueue, rawDataRingBuf, fftDataRingBuf):
+
+		self.log = logging.getLogger("Main.FFTWorker")
+		logSetup.initLogging(printQ = printQueue)
+
+		self.log.info("FFT Worker Starting up")
+
+		self.ctrlNs         = ctrlNs
+		self.printQueue     = printQueue
+		self.rawDataRingBuf = rawDataRingBuf
+		self.fftDataRingBuf = fftDataRingBuf
+
+		self.fftChunkSize = 2**16
+		self.outputSize = self.fftChunkSize//2 + 1
+		self.chunksPerAcq = int(SignalHound.rawSweepArrSize/self.fftChunkSize)
+		self.overlap = 4
+		self.window = np.hamming(self.fftChunkSize)
+		inArr = pyfftw.n_byte_align_empty(self.fftChunkSize, 16, dtype=np.float32)
+		outArr = pyfftw.n_byte_align_empty(self.outputSize, 16, dtype=np.complex64)
+
+		self.log.info("Choosing maximally optimized transform")
+		self.fftFunc = pyfftw.FFTW(inArr, outArr, flags=('FFTW_PATIENT', "FFTW_DESTROY_INPUT"))
+		self.log.info("Optimized transform selected. Run starting")
+
+		self.run()
+
+
+	def run(self):
+		loop_timer = time.time()
+		loopCounter = 0
+
+		while self.ctrlNs.acqRunning:
+
+			self.process()
+
+			now = time.time()
+			delta = (now-loop_timer)
+			if delta > 1:
+				interval = delta / (loopCounter)
+				freq = 1 / interval
+				self.log.info("Elapsed Time = %0.5f, Frequency = %s, items = %s", delta, freq, loopCounter)
+				loop_timer = now
+				loopCounter = 0
+
+			time.sleep(0.001)
+
+
+		self.log.info("FFT Worker Recieved halt signal, FFT Worker exiting!")
+		sys.exit()
+
+
+	def process(self):
+
+		ret = self.rawDataRingBuf.getOldest()
 		if ret != False:
 			rawDataBuf, retreiveLock = ret
-			loopCounter += 1
+
 			# this immediate lock release is *probably* a bad idea, but as long as the buffer doesn't get almost entirely full, it should be OK.
 			# It will also prevent blockages in the output buffer from propigating back to the input buffer.
 			retreiveLock.release()
@@ -65,17 +97,17 @@ def fftWorker(ctrlNs, printQueue, rawDataRingBuf, fftDataRingBuf):
 			samples = SignalHound.fastDecodeArray(rawDataBuf, SignalHound.rawSweepArrSize, np.short)
 
 
-			for x in range(chunksPerAcq*overlap-1):
+			for x in range(self.chunksPerAcq*self.overlap-1):
 				# Create byte-aligned array for efficent FFT, and copy the data we're interested into it.
 
-				rets = pyfftw.n_byte_align_empty(outputSize, 16, dtype=np.complex64)
-				dat = samples[x*(fftChunkSize/overlap):(x*(fftChunkSize/overlap))+fftChunkSize] * window
-				fftFunc(dat, rets)
-				fftArr = fftFunc.get_output_array()
+				rets = pyfftw.n_byte_align_empty(self.outputSize, 16, dtype=np.complex64)
+				dat = samples[x*(self.fftChunkSize/self.overlap):(x*(self.fftChunkSize/self.overlap))+self.fftChunkSize] * self.window
+				self.fftFunc(dat, rets)
+				fftArr = self.fftFunc.get_output_array()
 				# # log.warning("Buf = %s, arrSize = %s, dtype=%s, as floats = %s", processedDataBuf, fftArr.shape, fftArr.dtype, fftArr.view(dtype=np.float32).shape)
 				try:
 
-					processedDataBuf, addLock = fftDataRingBuf.getAddArray()
+					processedDataBuf, addLock = self.fftDataRingBuf.getAddArray()
 					processedDataBuf[:] = fftArr.view(dtype=np.float32)
 				finally:
 
@@ -86,19 +118,3 @@ def fftWorker(ctrlNs, printQueue, rawDataRingBuf, fftDataRingBuf):
 
 			# fftDataQueue.put({"data" : ret})
 
-
-
-			now = time.time()
-			delta = (now-loop_timer)
-			if delta > 1:
-				interval = delta / (loopCounter)
-				freq = 1 / interval
-				log.info("Elapsed Time = %0.5f, Frequency = %s, items = %s", delta, freq, loopCounter)
-				loop_timer = now
-				loopCounter = 0
-
-		time.sleep(0.001)
-
-
-	log.info("FFT Worker Recieved halt signal, FFT Worker exiting!")
-	sys.exit()
