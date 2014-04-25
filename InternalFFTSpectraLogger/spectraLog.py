@@ -36,18 +36,24 @@ sys.path.append(lib_path)
 
 import multiprocessing as mp
 
+
 import logSetup
 import logging
 import time
 import spectraAcqThread
 import spectraLogThread
-import fftWorker
 import printThread
 import sharedMemRingBuf
 from SignalHound import SignalHound
 import numpy as np
 import ctypes as ct
-FFT_PROCESSES = 8
+
+import settings as s
+
+# All imports after installing pyximport will be compiled with cython
+import pyximport
+pyximport.install(setup_args={"include_dirs":np.get_include()})
+import cythonFftWorker as fftWorker
 
 def go():
 
@@ -76,14 +82,14 @@ def go():
 	printProc.start()
 
 
-	rawDataRingBuf = sharedMemRingBuf.SharedMemRingBuf(10000, *SignalHound.getRawSweep_s_size())
+	rawDataRingBuf = sharedMemRingBuf.SharedMemRingBuf(2000, *SignalHound.getRawSweep_s_size())
 
 	# 32769 =fftChunkSize//2 + 1 (fftChunkSize = 2**16). Values are a complex64, which is really 2 32 bit floats
-	fftDataRingBuf = sharedMemRingBuf.SharedMemRingBuf(10000, ct.c_float, 32769*2)
+	fftDataRingBuf = sharedMemRingBuf.SharedMemRingBuf(1000, ct.c_float, 32769*2)
 
 	print(rawDataRingBuf)
 
-	fftWorkerPool = mp.Pool(processes=FFT_PROCESSES, initializer=fftWorker.fftWorker, initargs=(ctrlNs, printQueue, rawDataRingBuf, fftDataRingBuf))
+	fftWorkerPool = mp.Pool(processes=s.NUM_FFT_PROESSES, initializer=fftWorker.FFTWorker, initargs=(ctrlNs, printQueue, rawDataRingBuf, fftDataRingBuf))
 
 
 	acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="SweepThread", args=(statusMessageQueue, ctrlNs, printQueue, rawDataRingBuf))

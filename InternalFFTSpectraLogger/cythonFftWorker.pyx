@@ -22,10 +22,21 @@ import time
 import sys
 import pyfftw
 import numpy as np
+cimport numpy as np
+import cython
 from SignalHound import SignalHound
 
 import settings as s
 
+
+IN_DTYPE = np.int16
+ctypedef np.int16_t IN_DTYPE_t
+
+PROC_DTYPE = np.float32
+ctypedef np.float32_t PROC_DTYPE_t
+
+OUT_DTYPE = np.complex64
+ctypedef np.complex64_t OUT_DTYPE_t
 
 class FFTWorker(object):
 
@@ -55,6 +66,26 @@ class FFTWorker(object):
 		self.log.info("Optimized transform selected. Run starting")
 
 		self.run()
+
+	@cython.boundscheck(False)
+	def chunkFFT(self, np.ndarray[IN_DTYPE_t, ndim=1] arrIn):
+		cdef int chunks = self.chunksPerAcq
+		cdef int overlap = self.overlap-1
+		cdef int chunkSz = self.fftChunkSize
+		cdef int x, y, o, c
+		cdef np.ndarray[PROC_DTYPE_t,  ndim=1] inDat  = pyfftw.n_byte_align_empty(self.fftChunkSize, 16, dtype=PROC_DTYPE)
+		cdef np.ndarray[OUT_DTYPE_t, ndim=1] outDat = pyfftw.n_byte_align_empty(self.outputSize,   16, dtype=OUT_DTYPE)
+
+		for x in range(chunks*overlap-1):
+
+
+			c = x * chunkSz/overlap
+			for y in range(self.fftChunkSize):
+				o = y + c
+				inDat[y] = <PROC_DTYPE_t> arrIn[o]
+
+			self.fftFunc(inDat, outDat)
+			fftArr = self.fftFunc.get_output_array()
 
 
 	def run(self):
@@ -100,24 +131,25 @@ class FFTWorker(object):
 
 			samples = SignalHound.fastDecodeArray(rawDataBuf, SignalHound.rawSweepArrSize, np.short)
 
+			self.chunkFFT(samples)
 
-			for x in range(self.chunksPerAcq*self.overlap-1):
-				# Create byte-aligned array for efficent FFT, and copy the data we're interested into it.
+			#for x in range(self.chunksPerAcq*self.overlap-1):
+			#	# Create byte-aligned array for efficent FFT, and copy the data we're interested into it.
 
-				rets = pyfftw.n_byte_align_empty(self.outputSize, 16, dtype=np.complex64)
-				dat = samples[x*(self.fftChunkSize/self.overlap):(x*(self.fftChunkSize/self.overlap))+self.fftChunkSize] * self.window
-				self.fftFunc(dat, rets)
-				fftArr = self.fftFunc.get_output_array()
-				# # log.warning("Buf = %s, arrSize = %s, dtype=%s, as floats = %s", processedDataBuf, fftArr.shape, fftArr.dtype, fftArr.view(dtype=np.float32).shape)
-				# try:
+			#	rets = pyfftw.n_byte_align_empty(self.outputSize, 16, dtype=np.complex64)
+			#	dat = samples[x*(self.fftChunkSize/self.overlap):(x*(self.fftChunkSize/self.overlap))+self.fftChunkSize] * self.window
+			#	self.fftFunc(dat, rets)
+			#	fftArr = self.fftFunc.get_output_array()
+			#	# # log.warning("Buf = %s, arrSize = %s, dtype=%s, as floats = %s", processedDataBuf, fftArr.shape, fftArr.dtype, fftArr.view(dtype=np.float32).shape)
+			#	# try:
 
-				# 	processedDataBuf, addLock = self.fftDataRingBuf.getAddArray()
-				# 	processedDataBuf[:] = fftArr.view(dtype=np.float32)
-				# finally:
+			#	# 	processedDataBuf, addLock = self.fftDataRingBuf.getAddArray()
+			#	# 	processedDataBuf[:] = fftArr.view(dtype=np.float32)
+			#	# finally:
 
-				# 	addLock.release()
+			#	# 	addLock.release()
 
-				x += 1
+			#	x += 1
 
 			return 1
 		return 0
