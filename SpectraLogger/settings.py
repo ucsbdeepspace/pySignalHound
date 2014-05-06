@@ -1,0 +1,100 @@
+
+
+
+
+
+H_FLIP_FREQ            = 1.420405751786e9
+# I'm worried about possible IF frequencies creeping into the data, so I'm adding a 2.5 Mhz shift to
+# prevent the signal of interest (h-flip band) from being exactly centered in the acquired data.
+# I suspect the IF runs at the center frequency, and is sensitive to +-10 Mhz around the center.
+# Therefore, I can see some of the IF center-frequency creeping into the actual data.
+
+# Center frequency of the acquisition scan.
+ACQ_FREQ               = H_FLIP_FREQ + 2.5e6
+
+# The ACQ_FREQ is the center of the span. For "real-time" mode, the MAXIMUM span is 20 Mhz. For "sweeping" mode, it can be any integer multiple of 20 Mhz.
+ACQ_SPAN               = 20e6
+
+# Reference level of the acquisition
+ACQ_REF_LEVEL_DB       = -50
+
+# Attenuation and gain for the acquisition. Ranges: 0-3, -1 for "auto", where the hardware tries to determine the ideal gain/attenuation from the specified reference level.
+ACQ_ATTENUATION_DB     = 0
+ACQ_GAIN_SETTING       = 3
+
+# Realtime Bandwith (e.g. bin-size) of the FFT.
+#Possible values:
+# 631.2e3, Num Bins: 256    Largest Real-Time RBW
+# 315.6e3, Num Bins: 512
+# 157.1e3, Num Bins: 1024
+# 78.90e3, Num Bins: 2048
+# 39.45e3, Num Bins: 4096
+# 19.72e3, Num Bins: 8192
+# 9.863e3, Num Bins: 16384
+# 4.931e3, Num Bins: 32768
+# 2.465e3, Num Bins: 65536  Smallest Real-Time RBW
+ACQ_RBW                = 2.465e3
+
+# Acquisition Video-bandwidth. Normally just the same as the RBW
+ACQ_VBW                = ACQ_RBW
+
+# Sweep-time. In seconds. Valid ranges - 0.1 - 0.0001
+ACQ_SWEEP_TIME_SECONDS = 0.010
+
+# FFT Windowing function.
+# Supported windows:
+# "nutall"
+# "blackman"
+# "hamming"
+# "flat-top"
+ACQ_WINDOW_TYPE        = "hamming"
+
+# ACQ_UNITS determines what type of video processing is applied to the data.
+# "log"      = dBm
+# "voltage"  = mV
+# "power"    = mW
+# "bypass"   = No video processing
+ACQ_UNITS              = "power"
+
+# Acquisition mode. The only modes really likely relevant here are "sweeping" or "real-time"
+# "sweeping"       : Sweep the acquisition window across a large span, in 20 Mhz chunks. This is the mode the device must be in for any ACQ_SPAN > 20 Mhz.
+# "real-time"      : Acquire on the same 20 Mhz window continuously. Should have no dead-time in the acquisition, leading to 100% integration efficency.
+# -
+# Other, specialized modes.
+# "zero-span"
+# "time-gate"
+# "raw-sweep"
+# "raw-sweep-loop"
+# "audio-demod"
+# "raw-pipe"
+ACQ_TYPE               = "real-time"
+
+# The acquired data modes. Valid options are "average" and "min-max"
+# "average" returns the average power integrated over the "sweep-time" interval.
+# "min-max" is the minimum and maximum value tracked over the "sweep-time" interval. This mode is not currently supported by the data-logging system.
+# Contact Connor if you need it.
+ACQ_MODE               = "average"
+
+# Scquisition Y scaling settings.
+# Valid options:
+# "log-scale"
+# "log-full-scale"
+# "lin-scale"
+# "lin-full-scale"
+
+# The ACQ_Y_SCALE parameter will change the units of returned sweeps. If "log-scale" is provided
+# sweeps will be returned in amplitude unit dBm. If "lin-scale" is return, the returned units will be in
+# millivolts. If the full scale units are specified, no corrections are applied to the data and amplitudes are
+# taken directly from the full scale input.
+ACQ_Y_SCALE            = "log-scale"
+
+# The
+PRINT_LOOP_CNT         = 100
+
+# The system temperature and diagnostics are read out every CAL_CHK_LOOP_CNT sweeps. If the system temperature has devicated more then 2C,
+# the acquisition loop will automatically recalibrate the IF frontend, and embed the proper information reflecting the fact that the
+# system was recalibrated in the cal-log table in the data-log.
+CAL_CHK_LOOP_CNT       = 5000
+
+# Number of acquisition sweeps averaged over for each data-array written to the log files.
+NUM_AVERAGE = 600

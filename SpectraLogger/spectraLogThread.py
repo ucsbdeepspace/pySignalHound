@@ -27,7 +27,7 @@ import os
 import os.path
 import cPickle
 
-NUM_AVERAGE = 1000
+from settings import NUM_AVERAGE
 
 def logSweeps(dataQueue, ctrlNs, printQueue):
 

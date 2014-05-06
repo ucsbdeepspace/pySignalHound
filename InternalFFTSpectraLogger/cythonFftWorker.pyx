@@ -74,7 +74,7 @@ class FFTWorker(object):
 		cdef int chunkSz = self.fftChunkSize
 		cdef int x, y, o, c
 		cdef np.ndarray[PROC_DTYPE_t,  ndim=1] inDat  = pyfftw.n_byte_align_empty(self.fftChunkSize, 16, dtype=PROC_DTYPE)
-		cdef np.ndarray[OUT_DTYPE_t, ndim=1] outDat = pyfftw.n_byte_align_empty(self.outputSize,   16, dtype=OUT_DTYPE)
+		cdef np.ndarray[OUT_DTYPE_t, ndim=1]  outDat = pyfftw.n_byte_align_empty(self.outputSize,   16, dtype=OUT_DTYPE)
 
 		for x in range(chunks*overlap-1):
 
