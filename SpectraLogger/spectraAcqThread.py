@@ -21,8 +21,9 @@ import time
 import traceback
 
 # Pull in the settings crap
-from settings import H_FLIP_FREQ, ACQ_FREQ, ACQ_SPAN, ACQ_REF_LEVEL_DB, ACQ_ATTENUATION_DB, ACQ_GAIN_SETTING, ACQ_RBW, ACQ_VBW
+from settings import ACQ_FREQ, ACQ_SPAN, ACQ_REF_LEVEL_DB, ACQ_ATTENUATION_DB, ACQ_GAIN_SETTING, ACQ_RBW, ACQ_VBW
 from settings import ACQ_SWEEP_TIME_SECONDS, ACQ_WINDOW_TYPE, ACQ_UNITS, ACQ_TYPE, ACQ_MODE, ACQ_Y_SCALE, PRINT_LOOP_CNT, CAL_CHK_LOOP_CNT
+from settings import PLOT_UPDATE_INTERVAL
 
 def startAcquisition(sh, dataQueue):
 
@@ -42,9 +43,9 @@ def startAcquisition(sh, dataQueue):
 
 	dataQueue.put({"settings" : sh.getCurrentAcquisitionSettings()})
 
-def sweepSource(dataQueue, ctrlNs, printQueue):
+def sweepSource(dataQueues, ctrlNs, printQueue):
 
-
+	dataQueue, plotQueue = dataQueues
 
 
 	from SignalHound import SignalHound
@@ -63,9 +64,21 @@ def sweepSource(dataQueue, ctrlNs, printQueue):
 
 	temperature = sh.queryDeviceDiagnostics()["temperature"]
 
+	lastTime = time.time()
+
 	while 1:
 		try:
-			dataQueue.put(sh.fetchTrace())
+			trace = sh.fetchTrace()
+			dataQueue.put(trace)
+
+
+			if lastTime < time.time():
+				# log.info("Adding plot data to queue")
+				plotQueue.put(trace)
+				lastTime += PLOT_UPDATE_INTERVAL
+
+			del(trace)
+
 		except Exception:
 			log.error("IOError in Acquisition Thread!")
 			log.error(traceback.format_exc())
@@ -110,7 +123,7 @@ def sweepSource(dataQueue, ctrlNs, printQueue):
 		loops += 1
 
 		if ctrlNs.run == False:
-			log.info("Stopping Sweep-thread!")
+			log.info("Stopping Acq-thread!")
 			break
 
 
@@ -119,11 +132,17 @@ def sweepSource(dataQueue, ctrlNs, printQueue):
 
 	del(sh)
 
-	ctrlNs.acqRunning = False
 
-	while not dataQueue.empty():
-		dataQueue.get()
 
-	log.info("Sweep-thread exiting!")
+	log.info("Acq-thread closing dataQueue!")
 	dataQueue.close()
 	dataQueue.join_thread()
+
+	plotQueue.close()
+	plotQueue.cancel_join_thread()
+
+	ctrlNs.acqRunning = False
+
+	log.info("Acq-thread exiting!")
+	printQueue.close()
+	printQueue.join_thread()

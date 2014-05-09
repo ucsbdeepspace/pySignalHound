@@ -110,12 +110,15 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 			loop_timer = now
 
 		if ctrlNs.acqRunning == False:
-			log.info("Stopping Sweep-thread!")
+			log.info("Stopping Log-thread!")
 			break
 
 
 	out.close()
 
-	log.info("Log-thread exiting!")
+	log.info("Log-thread closing queues!")
 	dataQueue.close()
 	dataQueue.join_thread()
+	log.info("Log-thread exiting!")
+	printQueue.close()
+	printQueue.join_thread()

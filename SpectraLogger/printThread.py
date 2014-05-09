@@ -38,7 +38,7 @@ def printer(printQueue, ctrlNs):
 
 
 
-		if ctrlNs.acqRunning == False:
+		if ctrlNs.acqRunning == False and ctrlNs.apiRunning == False:
 			log.info("Stopping Printing-thread!")
 			break
 

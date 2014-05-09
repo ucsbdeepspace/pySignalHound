@@ -97,4 +97,10 @@ PRINT_LOOP_CNT         = 100
 CAL_CHK_LOOP_CNT       = 5000
 
 # Number of acquisition sweeps averaged over for each data-array written to the log files.
+#
 NUM_AVERAGE = 600
+
+# Time interval to update the plot output.
+# In Seconds. '1' is a fairly reasonable rate (once per second).
+PLOT_UPDATE_INTERVAL = 0.25
+

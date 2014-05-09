@@ -31,6 +31,7 @@ import logSetup
 import logging
 import spectraAcqThread
 import spectraLogThread
+import spectraPlotApiThread
 import printThread
 
 
@@ -40,6 +41,7 @@ def go():
 
 
 
+	plotQueue = mp.Queue()
 	dataQueue = mp.Queue()
 	printQueue = mp.Queue()
 	ctrlManager = mp.Manager()
@@ -50,18 +52,22 @@ def go():
 	ctrlNs = ctrlManager.Namespace()
 	ctrlNs.run = True
 	ctrlNs.acqRunning = True
+	ctrlNs.apiRunning = True
 	ctrlNs.logRunning = True
 	ctrlNs.stopped = False
 
-	acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="SweepThread", args=(dataQueue, ctrlNs, printQueue))
+	acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="AcqThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
 	acqProc.start()
 
-	logProc = mp.Process(target=spectraLogThread.logSweeps, name="SweepThread", args=(dataQueue, ctrlNs, printQueue))
+	logProc = mp.Process(target=spectraLogThread.logSweeps, name="LogThread", args=(dataQueue, ctrlNs, printQueue))
 	logProc.start()
+
+	plotProc = mp.Process(target=spectraPlotApiThread.startApiServer, name="PlotApiThread", args=(plotQueue, ctrlNs, printQueue))
+	plotProc.start()
 
 
 	# A separate process for printing, which allows nice easy non-blocking printing.
-	printProc = mp.Process(target=printThread.printer, name="SweepThread", args=(printQueue, ctrlNs))
+	printProc = mp.Process(target=printThread.printer, name="PrintArbiter", args=(printQueue, ctrlNs))
 	printProc.daemon = True
 	printProc.start()
 
@@ -92,21 +98,31 @@ def go():
 	# as soon as the queue is *actually* empty, we exit immediately
 	# - - -
 	# this was a fucking nightmare to track down.
-	while acqProc.is_alive() and logProc.is_alive():
-		if not dataQueue.empty():
-			dataQueue.get()
-		if not printQueue.empty():
-			printQueue.get()
-		acqProc.join(0.001)
-		logProc.join(0.001)
-		printProc.join(0.001)
+	log.info("Joining on AcqProc")
+	while acqProc.is_alive():
+		acqProc.join(0.1)
+		# print("acqProc.is_alive()", acqProc.is_alive(), "logProc.is_alive()", logProc.is_alive(), "plotProc.is_alive()", plotProc.is_alive())
+	log.info("Joining on LogProc")
+	while logProc.is_alive():
+		logProc.join(0.1)
+		# print("acqProc.is_alive()", acqProc.is_alive(), "logProc.is_alive()", logProc.is_alive(), "plotProc.is_alive()", plotProc.is_alive())
+	log.info("Joining on PlotProc")
+	while plotProc.is_alive():
+		plotProc.join(0.1)
+		# print("acqProc.is_alive()", acqProc.is_alive(), "logProc.is_alive()", logProc.is_alive(), "plotProc.is_alive()", plotProc.is_alive())
 
 
-	log.info("Threads stopped.")
-	log.info("Stopping Shared Memory Manager!")
+	log.info("Joining on PlotProc")
+	while printProc.is_alive():
+		printProc.join(0.05)
+
+
+
+	print("Threads stopped.")
+	print("Stopping Shared Memory Manager.")
 	ctrlManager.shutdown()
 
-	log.info("Shutdown complete. Exiting.")
+	print("Shutdown complete. Exiting.")
 
 	sys.exit()
 
