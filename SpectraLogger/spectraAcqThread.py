@@ -61,6 +61,9 @@ def sweepSource(dataQueues, ctrlNs, printQueue):
 	sh = SignalHound()
 	startAcquisition(sh, dataQueue)
 
+	# Send the trace size to the acq thread so I can properly set up the data-log file
+	numPoints = sh.queryTraceInfo()["arr-size"]
+	dataQueue.put({"arrSize" : numPoints})
 
 	temperature = sh.queryDeviceDiagnostics()["temperature"]
 

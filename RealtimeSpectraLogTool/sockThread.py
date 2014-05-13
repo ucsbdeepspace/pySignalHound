@@ -35,9 +35,9 @@ def processData(inStr):
 	if not raw_data.startswith("BEGIN_DATA"):
 		return tail
 
-	print "Have valid data!"
 
 	dummy_head, pDat = raw_data.split("BEGIN_DATA", 1)
+	print "Have valid data!", len(pDat)
 
 	data = cPickle.loads(pDat)
 	queVars.setData(data)
@@ -52,11 +52,14 @@ def startApiClient():
 	conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	conn.settimeout(0.1)
 	conn.connect((HOST, PORT))
+
 	ret = ""
 	while 1:
 
 		try:
-			ret += conn.recv(4096)
+			# Typical 80 Kpt array is 3642464 bytes
+			# 2**22 is                4194304 bytes
+			ret += conn.recv(2**22)
 			ret = processData(ret)
 
 		except socket.timeout:
@@ -73,6 +76,8 @@ def startApiClient():
 		if not queVars.run:
 			print("SocketThread stopping")
 			break
+
+		time.sleep(0.001)
 
 if __name__ == "__main__":
 	if len(sys.argv) > 1:

@@ -98,8 +98,10 @@ class SpectrumFrame(wx.Frame):
 
 
 	def updateGUI(self, dummy_event): # wxGlade: MainW.<event_handler>		Main Polling Loop
-		self.visPanel.setDataArray(queVars.getData())
-		print("Updating graph?")
+		data = queVars.getData()
+		if data != None:
+			self.visPanel.setDataArray(data)
+			print("Updating graph?")
 
 	def quitApp(self, dummy_event): # wxGlade: MainFrame.<event_handler>
 		print "Exiting"
@@ -130,7 +132,7 @@ class MyApp(wx.App):
 
 
 
-		mainFrame.tbUpdate.Start((1000/10), 0)
+		mainFrame.tbUpdate.Start((1000/30), 0)
 		mainFrame.Show()
 		return 1
 

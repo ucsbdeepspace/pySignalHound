@@ -2,25 +2,29 @@
 
 
 
-
-H_FLIP_FREQ            = 1.420405751786e9
 # I'm worried about possible IF frequencies creeping into the data, so I'm adding a 2.5 Mhz shift to
 # prevent the signal of interest (h-flip band) from being exactly centered in the acquired data.
 # I suspect the IF runs at the center frequency, and is sensitive to +-10 Mhz around the center.
 # Therefore, I can see some of the IF center-frequency creeping into the actual data.
+#
+# Note: H_FLIP_FREQ is a convenience variable. It's only defined to make how the ACQ_FREQ is determined
+# more clear. The only variable the actual acquisition system cares about is ACQ_FREQ
+# H_FLIP_FREQ            = 1.420405751786e9
 
 # Center frequency of the acquisition scan.
-ACQ_FREQ               = H_FLIP_FREQ + 2.5e6
+# ACQ_FREQ               = H_FLIP_FREQ + 2.5e6
+ACQ_FREQ               = 120e6
 
 # The ACQ_FREQ is the center of the span. For "real-time" mode, the MAXIMUM span is 20 Mhz. For "sweeping" mode, it can be any integer multiple of 20 Mhz.
-ACQ_SPAN               = 20e6
+ACQ_SPAN               = 200e6
+# ACQ_SPAN               = 100e6
 
 # Reference level of the acquisition
-ACQ_REF_LEVEL_DB       = -50
+ACQ_REF_LEVEL_DB       = 15
 
 # Attenuation and gain for the acquisition. Ranges: 0-3, -1 for "auto", where the hardware tries to determine the ideal gain/attenuation from the specified reference level.
-ACQ_ATTENUATION_DB     = 0
-ACQ_GAIN_SETTING       = 3
+ACQ_ATTENUATION_DB     = -1
+ACQ_GAIN_SETTING       = -1
 
 # Realtime Bandwith (e.g. bin-size) of the FFT.
 #Possible values:
@@ -67,7 +71,8 @@ ACQ_UNITS              = "power"
 # "raw-sweep-loop"
 # "audio-demod"
 # "raw-pipe"
-ACQ_TYPE               = "real-time"
+# ACQ_TYPE               = "real-time"
+ACQ_TYPE               = "sweeping"
 
 # The acquired data modes. Valid options are "average" and "min-max"
 # "average" returns the average power integrated over the "sweep-time" interval.
@@ -97,10 +102,12 @@ PRINT_LOOP_CNT         = 100
 CAL_CHK_LOOP_CNT       = 5000
 
 # Number of acquisition sweeps averaged over for each data-array written to the log files.
-#
-NUM_AVERAGE = 600
+#60 divided by NUM_AVERAGE yields Hz
+NUM_AVERAGE            = 600
 
 # Time interval to update the plot output.
 # In Seconds. '1' is a fairly reasonable rate (once per second).
-PLOT_UPDATE_INTERVAL = 0.25
+# for 80 Kpt arrays, you start running into data-transfer bottlenecks around 2 Hz.
+# smaller arrays can go faster, larger slower, etc...
+PLOT_UPDATE_INTERVAL = 0.5
 

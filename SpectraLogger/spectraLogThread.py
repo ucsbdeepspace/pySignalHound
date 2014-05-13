@@ -47,14 +47,31 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 	log.info("Logging data to %s", logFQPath)
 	out = h5py.File(logFQPath, "w")
 
-	arrWidth = 16384 + 1  # FFT Array is 16384 items wide, +1 for time-stamp
+
+	# the size of the acquisiton array can vary. Therefore, we wait for the acq thread to send a message containing
+	# the array size before allocating the HDF5 array.
+	while 1:
+
+		if dataQueue.empty():
+			time.sleep(0.005)
+		else:
+			tmp = dataQueue.get()
+			if "arrSize" in tmp:
+				log.info("Have array size for acquisition. Creating HDF5 file and starting logging.")
+				arrWidth = tmp["arrSize"]
+				break
+
+	arrWidth = arrWidth + 1  # FFT Array is 16384 items wide, +1 for time-stamp
 
 	# Main dataset - compressed, chunked, checksummed.
 	dset = out.create_dataset('Spectrum_Data', (0,arrWidth), maxshape=(None,arrWidth), chunks=True, compression="gzip", fletcher32=True)
 
 	# Cal and system status log dataset.
 	calset = out.create_dataset('Acq_info', (0,1), maxshape=(None,None), dtype=h5py.new_vlen(str))
-	items = []
+
+
+	runningSum = np.array(())
+	runningSumItems = 0
 	while 1:
 
 		if dataQueue.empty():
@@ -64,7 +81,12 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 			tmp = dataQueue.get()
 
 			if "max" in tmp:
-				items.append(tmp["max"])
+				if runningSum.shape != tmp["max"].shape:
+					runningSum = np.zeros_like(tmp["max"])
+					runningSumItems = 0
+
+				runningSum += tmp["max"]
+				runningSumItems += 1
 			elif "settings" in tmp or "status" in tmp:
 
 				if "settings" in tmp:
@@ -85,11 +107,11 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 				log.error(tmp)
 
 
-		if len(items) == NUM_AVERAGE:
+		if runningSumItems == NUM_AVERAGE:
 
-			arr = np.array(items)
+
 			# print "Array shape = ", arr.shape
-			arr = np.average(arr, axis=0)
+			arr = runningSum / runningSumItems
 			# print arr.shape
 
 			dat = np.concatenate(([time.time()], arr))
@@ -101,7 +123,10 @@ def logSweeps(dataQueue, ctrlNs, printQueue):
 			out.flush()  # FLush early, flush often
 			# Probably a bad idea without a SSD
 
-			items = []
+
+			runningSum = np.zeros_like(runningSum)
+			print("Running sum shape = ", runningSum.shape)
+			runningSumItems = 0
 
 			now = time.time()
 			delta = now-loop_timer

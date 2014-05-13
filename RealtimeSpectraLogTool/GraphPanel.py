@@ -4,69 +4,62 @@
 import wx
 
 import numpy as np
-import queVars
+
+import sys
 
 
-import random
-import wx
-
-
-
+GRAPH_GRID_Y_STEP = 5
 
 class GraphPanel(wx.Panel):
 
-		#Number of items in the color map LUT
-		#I'm pretty sure the actual cm library only uses 256, so settings above 256 have no benefit
-
 	def __init__(self,  *args, **kwds):
-		#kwds["style"] = wx.RESIZE_BORDER|wx.TAB_TRAVERSAL|wx.CLIP_CHILDREN
 		wx.Panel.__init__(self, *args, **kwds)
-		#print self
-		#wx.Panel.__init__( self, parent, **kwargs )
-
-		#print "Test"
-		#super(GridPanel, self).__init__(None, -1, 'CursorTracker')	# Call inheritor's __init__
-
 
 		self.data = np.array([])
 
 		self.mdc = None # memory dc to draw off-screen
 
+		# Set up min and max values so the first run will override them
+		self.minVal = sys.maxint*1.0
+		self.maxVal = (sys.maxint-1)*-1.0
+
 		self.Bind(wx.EVT_SIZE, self.onSize)
 		self.Bind(wx.EVT_ERASE_BACKGROUND, self.onErase)
 		self.Bind(wx.EVT_PAINT, self.onPaint)
 
-		#print "Size", self.rectDims
-		#Blue text on a black->red->orange->yellow->white background
 
+		self._colourBlack		= wx.Colour(0, 0, 0)
+		self._colourWhite		= wx.Colour(255, 255, 255)
+		self._colourPastelBlue	= wx.Colour(100, 100, 200)
 
-		self.colourBlack	= wx.Colour(0, 0, 0)
-		self.colourWhite	= wx.Colour(255, 255, 255)
+		self._penBlack			= wx.Pen(self._colourBlack)
+		self._penWhite			= wx.Pen(self._colourWhite)
+		self._penPastelBlue		= wx.Pen(self._colourPastelBlue)
 
-		self.penBlack		= wx.Pen(self.colourBlack)
-		self.penWhite		= wx.Pen(self.colourWhite)
+		self._brushBlack = wx.Brush(self._colourBlack)
+		self._brushWhite = wx.Brush(self._colourWhite)
 
-		self.brushBlack = wx.Brush(self.colourBlack)
-		self.brushWhite = wx.Brush(self.colourWhite)
-
+		# Only redraw if stale is true.
+		self.stale=True
 
 		self.onSize(None)
 		#self.onTimer()
 
 		self.redraw_timer = wx.Timer(self)
 		self.Bind(wx.EVT_TIMER, self.on_redraw_timer, self.redraw_timer)
-		# self.redraw_timer.Start(1000/10)
+		self.redraw_timer.Start(1000/30)
 
-	def onSize(self, event):
+	def onSize(self, dummy_event):
 		# re-create memory dc to fill window
+		self.stale=True
 		w, h = self.GetClientSize()
 		self.mdc = wx.MemoryDC(wx.EmptyBitmap(w, h))
 		self.redraw()
 
-	def onErase(self, event):
+	def onErase(self, dummy_event):
 		pass # don't do any erasing to avoid flicker
 
-	def onPaint(self, event):
+	def onPaint(self, dummy_event):
 		# just blit the memory dc
 		dc = wx.PaintDC(self)
 		if not self.mdc:
@@ -75,10 +68,10 @@ class GraphPanel(wx.Panel):
 		dc.Blit(0, 0, w, h, self.mdc, 0, 0)
 
 
-	def generateLineList(self, xArr, yArr, arrSz, dcSize):
+	def generateLineList(self, xArr, yArr, arrSz):
 
 		lineList = []
-		w, h = dcSize
+		w, h = self.mdc.GetSize()
 		start = None, None
 		for offset in xrange(arrSz):
 			if not start:
@@ -92,10 +85,10 @@ class GraphPanel(wx.Panel):
 		return lineList
 
 
-	def generateScatterList(self, xArr, yArr, arrSz, dcSize):
+	def generateScatterList(self, xArr, yArr, arrSz):
 
 		pointList = []
-		w, h = dcSize
+		w, h = self.mdc.GetSize()
 		for offset in xrange(arrSz):
 			tX = w-xArr[offset]
 			tY = h-yArr[offset]
@@ -103,23 +96,68 @@ class GraphPanel(wx.Panel):
 			pointList.append((tX, tY))
 		return pointList
 
+	def generateGridList(self):
+		w, h = self.mdc.GetSize()
+
+		lineList = []
+		yMin, yMax = int(self.minVal), int(self.maxVal)
+
+
+
+		for y in range(yMin, yMax, GRAPH_GRID_Y_STEP):
+			pxY = self.mapYValueToContext(y)
+			lineList.append((0, pxY, w, pxY))
+
+		for x in np.linspace(0, w, num=w/50):
+			lineList.append((x, 0, x, h))
+
+
+
+		return lineList
+
+
 	def setDataArray(self, inData):
+		self.stale=True
+		# THe plotting starts to really slow down above 20kpoints.
+		# Therefore, we just start skipping data-points to keep the total array size below 20k
+		skip = len(inData)/20000
+		if skip != 0:
+			inData = inData[::skip]
+
 		self.data = inData
 		self.redraw()
 
+	def preCalcScalingFactor(self, yHeight):
+
+		dataHeight = float(self.maxVal - self.minVal)
+		if dataHeight == 0:
+			dataHeight = 0.001
+		self.scaleFactor = (yHeight-2.0) / dataHeight
+
+	def mapYValueToContext(self, value):
+
+
+		value = ((value-self.minVal) * self.scaleFactor) + 1
+		return value
+
 	def redraw(self):
 		# do the actual drawing on the memory dc here
+		if not self.stale:
+			# print("Not drawing as plot is not stale")
+			return
+
+		self.stale = False
 		dc = self.mdc
 
 		w, h = dc.GetSize()
 		dc.Clear()
-		dc.SetPen(self.penBlack)
+		dc.SetPen(self._penBlack)
 
 
-		dc.SetBrush(self.brushBlack)
+		dc.SetBrush(self._brushBlack)
 		dc.DrawRectangle(0, 0, w, h)
 
-		dc.SetTextForeground(self.colourWhite)
+		dc.SetTextForeground(self._colourWhite)
 		#print arr
 		#print self.rectDims
 
@@ -131,42 +169,43 @@ class GraphPanel(wx.Panel):
 			dataMin = self.data.min()
 			dataMax = self.data.max()
 
-			dataHeight = float(dataMax - dataMin)
-			if dataHeight == 0:
-				dataHeight = 0.001
-			scaleFactor = (h-2.0) / dataHeight
-			# print scaleFactor, dataMin, dataMax, dataHeight
+			if dataMin < self.minVal:
+				self.minVal = (dataMin-5.0) + (5-(dataMin % 5))
+
+			if dataMax > self.maxVal:
+				self.maxVal = (dataMax+5.0) - (dataMax % 5)
+
+
+
+			self.preCalcScalingFactor(h)
+
+			# print scaleFactor, self.minVal, self.maxVal, dataHeight
 
 			dataX = np.linspace(1, w-1, num=dataLen)
 
-			dataY = ((self.data-dataMin) * scaleFactor) + 1
+			dataY = self.mapYValueToContext(self.data)
 
 			# pointList = self.generateScatterList(dataX, dataY, dataLen, dc.GetSize())
 			# pointList.sort()
-			# dc.DrawPointList(pointList, self.penWhite)
+			# dc.DrawPointList(pointList, self._penWhite)
 
-			pointList = self.generateScatterList(dataX, dataY, dataLen, dc.GetSize())
+
+			gridList = self.generateGridList()
+			dc.DrawLineList(gridList, pens=self._penPastelBlue)
+
+
+			pointList = self.generateScatterList(dataX, dataY, dataLen)
 			# pointList.sort()
 
-			dc.SetPen(self.penWhite)
+			dc.SetPen(self._penWhite)
 			dc.DrawLines(pointList)
 
 
-			dc.DrawText("Max: %0.5fdB" % dataMax, 10, 5)
-			dc.DrawText("Min: %0.5fdB" % dataMin, 10, h - 20)
+			dc.DrawText("Max: %0.5fdB" % self.maxVal, 10, 5)
+			dc.DrawText("Min: %0.5fdB" % self.minVal, 10, h - 20)
 
-			dc.DrawText("Pk-Pk: %0.8fdB" % (dataMax-dataMin), w-140, 5)
-
-			dat = self.data
-
-			# dat = dat - np.mean(dat)
-
-			# dat = dat**2
-			# dat = np.mean(dat)
-			# dat = np.sqrt(dat)
-
-			# dc.DrawText("RMS:  %0.8fV" % dat, w-140, h - 20)
-
+			dc.DrawText("Pk-Pk: %0.8fdB" % (self.maxVal-self.minVal), w-150, 5)
+			dc.DrawText("Y-Grid: %0.2fdB per div" % GRAPH_GRID_Y_STEP, w-150, h - 20)
 
 
 
@@ -174,32 +213,15 @@ class GraphPanel(wx.Panel):
 
 
 	def draw_plot(self):
-		""" Redraws the plot
-		"""
-		# when xmin is on auto, it "follows" xmax to produce a
-		# sliding window effect. therefore, xmin is assigned after
-		# xmax.
-		#
 
-		# for ymin and ymax, find the minimal and maximal values
-		# in the data set and add a mininal margin.
-		#
-		# note that it's easy to change this scheme to the
-		# minimal/maximal value in the current display, and not
-		# the whole data set.
-		#
 		self.redraw()
 
 
 
-	def on_redraw_timer(self, event):
-		# if paused do not add data, but still redraw the plot
-		# (to respond to scale modifications, grid change, etc.)
-
-		#print "Bwuh?", self.channel, self.data.shape, self.data[...,self.channel], np.arange(self.data.shape[0])
+	def on_redraw_timer(self, dummy_event):
 		self.draw_plot()
 
-	def on_exit(self, event):
+	def on_exit(self, dummy_event):
 		print "trying to die"
 		self.Destroy()
 
