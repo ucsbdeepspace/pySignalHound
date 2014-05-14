@@ -13,18 +13,18 @@
 
 # Center frequency of the acquisition scan.
 # ACQ_FREQ               = H_FLIP_FREQ + 2.5e6
-ACQ_FREQ               = 120e6
+ACQ_FREQ               = 150e6
 
 # The ACQ_FREQ is the center of the span. For "real-time" mode, the MAXIMUM span is 20 Mhz. For "sweeping" mode, it can be any integer multiple of 20 Mhz.
-ACQ_SPAN               = 200e6
-# ACQ_SPAN               = 100e6
+# ACQ_SPAN               = 20e6
+ACQ_SPAN               = 100e6
 
 # Reference level of the acquisition
 ACQ_REF_LEVEL_DB       = 15
 
 # Attenuation and gain for the acquisition. Ranges: 0-3, -1 for "auto", where the hardware tries to determine the ideal gain/attenuation from the specified reference level.
-ACQ_ATTENUATION_DB     = -1
-ACQ_GAIN_SETTING       = -1
+ACQ_ATTENUATION_DB     = 0
+ACQ_GAIN_SETTING       = 2
 
 # Realtime Bandwith (e.g. bin-size) of the FFT.
 #Possible values:
@@ -109,5 +109,5 @@ NUM_AVERAGE            = 600
 # In Seconds. '1' is a fairly reasonable rate (once per second).
 # for 80 Kpt arrays, you start running into data-transfer bottlenecks around 2 Hz.
 # smaller arrays can go faster, larger slower, etc...
-PLOT_UPDATE_INTERVAL = 0.5
+PLOT_UPDATE_INTERVAL = 1
 

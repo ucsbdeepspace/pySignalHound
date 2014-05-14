@@ -27,7 +27,7 @@ import cPickle
 HOST = ''                 # Symbolic name meaning all available interfaces
 PORT = 50007              # Arbitrary non-privileged port
 
-TX_TIMEOUT = 2
+TX_TIMEOUT = 5
 CONN_TIMEOUT = 0.01
 
 def startApiServer(dataQueue, ctrlNs, printQueue):

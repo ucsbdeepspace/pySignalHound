@@ -6,8 +6,8 @@ import time
 import sys
 import sockThread
 
-from pycallgraph import PyCallGraph
-from pycallgraph.output import GraphvizOutput
+# from pycallgraph import PyCallGraph
+# from pycallgraph.output import GraphvizOutput
 
 def threadRun():
 
@@ -16,6 +16,14 @@ def threadRun():
 
 def run():
 
+	if len(sys.argv) > 1:
+		print("Using IP from command line for remote server")
+		print("Server IP = %s" % sys.argv[1])
+		sockThread.HOST = sys.argv[1]
+	else:
+		print("Remote server IP can be specified as a command line parameter - ")
+		print("E.g. 'python main.py {ip address}'")
+		print("Using default server address (localhost)")
 
 	import GUI
 
