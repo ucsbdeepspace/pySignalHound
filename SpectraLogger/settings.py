@@ -13,11 +13,11 @@
 
 # Center frequency of the acquisition scan.
 # ACQ_FREQ               = H_FLIP_FREQ + 2.5e6
-ACQ_FREQ               = 150e6
+ACQ_FREQ               = 100e6
 
-# The ACQ_FREQ is the center of the span. For "real-time" mode, the MAXIMUM span is 20 Mhz. For "sweeping" mode, it can be any integer multiple of 20 Mhz.
+# The ACQ_SPAN is the width of the acquisiton window. For "real-time" mode, the MAXIMUM width is 20 Mhz. For "sweeping" mode, it can be any integer.
 # ACQ_SPAN               = 20e6
-ACQ_SPAN               = 100e6
+ACQ_SPAN               = 150e6
 
 # Reference level of the acquisition
 ACQ_REF_LEVEL_DB       = 15
@@ -37,6 +37,7 @@ ACQ_GAIN_SETTING       = 2
 # 9.863e3, Num Bins: 16384
 # 4.931e3, Num Bins: 32768
 # 2.465e3, Num Bins: 65536  Smallest Real-Time RBW
+# Bandwidths below 9.863e3 seem to only return 16 kpts. Not sure why.
 ACQ_RBW                = 2.465e3
 
 # Acquisition Video-bandwidth. Normally just the same as the RBW
@@ -105,9 +106,7 @@ CAL_CHK_LOOP_CNT       = 5000
 #60 divided by NUM_AVERAGE yields Hz
 NUM_AVERAGE            = 600
 
-# Time interval to update the plot output.
-# In Seconds. '1' is a fairly reasonable rate (once per second).
-# for 80 Kpt arrays, you start running into data-transfer bottlenecks around 2 Hz.
-# smaller arrays can go faster, larger slower, etc...
-PLOT_UPDATE_INTERVAL = 1
+# Number of acquisition sweeps averaged over for each data-array fet to the plotting system
+# 60 divided by NUM_AVERAGE yields Hz
+NUM_PLOT_AVERAGE       = 30
 

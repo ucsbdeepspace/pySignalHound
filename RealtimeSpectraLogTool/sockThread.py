@@ -39,8 +39,17 @@ def processData(inStr):
 	dummy_head, pDat = raw_data.split("BEGIN_DATA", 1)
 	print "Have valid data!", len(pDat)
 
-	data = cPickle.loads(pDat)
-	queVars.setData(data)
+	dat = cPickle.loads(pDat)
+	startFreq = dat["startFreq"]
+	binSize = dat["binSize"]
+	numBins = dat["numBins"]
+
+	data = dat["data"]
+
+	if (numBins,) != data.shape:
+		print "Error?", numBins, data.shape[0]
+
+	queVars.setData(data, {"numBins":numBins, "binSize":binSize, "startFreq":startFreq})
 	return tail
 
 

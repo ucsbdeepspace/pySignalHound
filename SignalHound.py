@@ -238,7 +238,7 @@ class SignalHound(object):
 		if ret["temperature"] > 70 or ret["temperature"] < 0:
 			raise EnvironmentError("Hardware temperature outside of normal operating bounds.")
 
-		self.log.info("Diagnostics queried. Values = %s", ret)
+		self.log.info("Diagnostics queried. Values = \n%s", "\n".join(["	{key}, {value}".format(key=key, value=value) for key, value in ret.iteritems()]))
 		return ret
 
 	def configureAcquisition(self, detector, scale):

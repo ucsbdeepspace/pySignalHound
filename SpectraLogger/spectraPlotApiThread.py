@@ -20,8 +20,10 @@ import logging
 import time
 import socket
 import logSetup
+import numpy as np
 import traceback
 import cPickle
+import settings
 
 
 HOST = ''                 # Symbolic name meaning all available interfaces
@@ -48,6 +50,18 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 	data = None
 	sok = None
 	dataChunks = 0
+
+
+	startFreq = None
+	binSize = None
+	numBins = None
+
+
+	runningSum = np.array(())
+	runningSumItems = 0
+
+
+
 	while 1:
 
 		if not sok:
@@ -60,7 +74,14 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 				log.info("Have connection %s from %s", sok, addr)
 			except socket.timeout:
 				if not dataQueue.empty():
-					dummy = dataQueue.get()
+					tmp = dataQueue.get()
+
+					if "settings" in tmp:
+						log.info("Setting plot diagnostics for ")
+						dat = tmp["settings"]
+						startFreq = dat["ret-start-freq"]
+						binSize = dat["arr-bin-size"]
+						numBins = dat["arr-size"]
 					dataChunks += 1
 
 		if sok != None:
@@ -70,39 +91,71 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 				# log.info("Sending plot data out socket")
 				tmp = dataQueue.get()
 
-				if "max" in tmp:
-					data = tmp["max"]
-					pData = cPickle.dumps(data)
-					pData = "BEGIN_DATA"+pData+"END_DATA"
-					try:
-						# Holy shit, sok.send is MUCH faster then sok.sendall. Wat?
-						# I bet senall() is sending each byte at a time from native python, rather then just calling send() from the OS
-						# API directly on the buffer to send. Stupid.
-						ret = sok.send(pData)
-						if ret != len(pData):
-							raise BufferError
-						dataChunks += 1
-					except BufferError:
-						log.error("Transmission failed to properly transmit all bytes")
-						log.error(traceback.format_exc())
 
-					except socket.timeout:
-						log.error("Timeout on transmit?")
-						log.error(traceback.format_exc())
-					except AttributeError:
-						# I have NO idea how this was happening, but somehow sok.sendall was being called after
-						# sok had been set = None.
-						log.error("WAT?")
-						log.error(traceback.format_exc())
+				if "settings" in tmp:
+					log.info("Setting plot diagnostics for ")
+					dat = tmp["settings"]
+					startFreq = dat["ret-start-freq"]
+					binSize = dat["arr-bin-size"]
+					numBins = dat["arr-size"]
 
+				elif "max" in tmp:
 
-					except socket.error:
-						log.error("Socket Error!")
-						log.error(traceback.format_exc())
-						sok = False
+					if runningSum.shape != tmp["max"].shape:
+						runningSum = np.zeros_like(tmp["max"])
+						runningSumItems = 0
+
+					runningSum += tmp["max"]
+					runningSumItems += 1
 				else:
 					log.error("WAT? Unknown packet!")
 					log.error(tmp)
+
+
+			if runningSumItems > settings.NUM_PLOT_AVERAGE:
+
+				# print "Array shape = ", arr.shape
+				arr = runningSum / runningSumItems
+				# print arr.shape
+
+				outDict = {"startFreq":startFreq,
+							"numBins":numBins,
+							"binSize": binSize,
+							"data":arr}
+
+				pData = cPickle.dumps(outDict, protocol=cPickle.HIGHEST_PROTOCOL)
+				pData = "BEGIN_DATA"+pData+"END_DATA"
+
+				runningSum = np.zeros_like(runningSum)
+				runningSumItems = 0
+				try:
+					# Holy shit, sok.send is MUCH faster then sok.sendall. Wat?
+					# I bet senall() is sending each byte at a time from native python, rather then just calling send() from the OS
+					# API directly on the buffer to send. Stupid.
+					ret = sok.send(pData)
+					if ret != len(pData):
+						raise BufferError
+					dataChunks += 1
+				except BufferError:
+					log.error("Transmission failed to properly transmit all bytes")
+					log.error(traceback.format_exc())
+
+				except socket.timeout:
+					log.error("Timeout on transmit?")
+					log.error(traceback.format_exc())
+				except AttributeError:
+					# I have NO idea how this was happening, but somehow sok.sendall was being called after
+					# sok had been set = None.
+					log.error("WAT?")
+					log.error(traceback.format_exc())
+					continue
+
+
+				except socket.error:
+					log.error("Socket Error!")
+					log.error(traceback.format_exc())
+					sok = None
+
 
 
 		if ctrlNs.acqRunning == False:
