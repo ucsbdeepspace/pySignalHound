@@ -17,7 +17,7 @@ ACQ_FREQ               = 100e6
 
 # The ACQ_SPAN is the width of the acquisiton window. For "real-time" mode, the MAXIMUM width is 20 Mhz. For "sweeping" mode, it can be any integer.
 # ACQ_SPAN               = 20e6
-ACQ_SPAN               = 150e6
+ACQ_SPAN               = 60e6
 
 # Reference level of the acquisition
 ACQ_REF_LEVEL_DB       = 15
@@ -73,7 +73,16 @@ ACQ_UNITS              = "power"
 # "audio-demod"
 # "raw-pipe"
 # ACQ_TYPE               = "real-time"
-ACQ_TYPE               = "sweeping"
+# ACQ_TYPE               = "sweeping"
+
+# The real-time-sweeping mode is a synthetic mode provided by this software, rather then an actual hardware mode.
+ACQ_TYPE               = "real-time-sweeping"
+# overlap of acquisitions in the real-time-sweeping mode. In percentage. 1=100%, 0.5 = 50%, 0.01 = 1%, 0 = 0%
+# Don't actually use 1 (100%). Shit would break.
+ACQ_OVERLAP            = 0.2
+# Number of scans to take at each frequency
+ACQ_BIN_SAMPLES        = 600
+
 
 # The acquired data modes. Valid options are "average" and "min-max"
 # "average" returns the average power integrated over the "sweep-time" interval.

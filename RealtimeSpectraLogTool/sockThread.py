@@ -37,7 +37,6 @@ def processData(inStr):
 
 
 	dummy_head, pDat = raw_data.split("BEGIN_DATA", 1)
-	print "Have valid data!", len(pDat)
 
 	dat = cPickle.loads(pDat)
 	startFreq = dat["startFreq"]
@@ -45,6 +44,7 @@ def processData(inStr):
 	numBins = dat["numBins"]
 
 	data = dat["data"]
+	print "Have valid data!", len(pDat)/1000000.0, "MBytes, dataPoints =", data.shape[0], "points, Bytes/Point", (len(pDat)*1.0)/data.shape[0]
 
 	if (numBins,) != data.shape:
 		print "Error?", numBins, data.shape[0]

@@ -30,11 +30,12 @@ import multiprocessing as mp
 import logSetup
 import logging
 import spectraAcqThread
+import internalSweepSpectraAcqThread
 import spectraLogThread
 import spectraPlotApiThread
 import printThread
 
-
+import settings
 
 
 def go():
@@ -56,7 +57,14 @@ def go():
 	ctrlNs.logRunning = True
 	ctrlNs.stopped = False
 
-	acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="AcqThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
+
+	if settings.ACQ_TYPE == "real-time-sweeping":
+		print("Importing real-time-sweeping module!")
+		acqProc = mp.Process(target=internalSweepSpectraAcqThread.sweepSource, name="AcqThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
+	else:
+		print("Importing real-time module!")
+		acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="AcqThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
+
 	acqProc.start()
 
 	logProc = mp.Process(target=spectraLogThread.logSweeps, name="LogThread", args=(dataQueue, ctrlNs, printQueue))

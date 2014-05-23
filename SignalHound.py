@@ -198,7 +198,7 @@ class SignalHound(object):
 		# A USB voltage of below 4.4V may cause readings to be out of spec. Check your cable for damage and
 		# USB connectors for damage or oxidation.
 
-		self.log.info("Querying device diagnostics.")
+		# self.log.info("Querying device diagnostics.")
 		temperature = ct.c_float(0)
 		voltage1_8 = ct.c_float(0)
 		voltage1_2 = ct.c_float(0)
@@ -238,7 +238,7 @@ class SignalHound(object):
 		if ret["temperature"] > 70 or ret["temperature"] < 0:
 			raise EnvironmentError("Hardware temperature outside of normal operating bounds.")
 
-		self.log.info("Diagnostics queried. Values = \n%s", "\n".join(["	{key}, {value}".format(key=key, value=value) for key, value in ret.iteritems()]))
+		# self.log.info("Diagnostics queried. Values = \n%s", "\n".join(["	{key}, {value}".format(key=key, value=value) for key, value in ret.iteritems()]))
 		return ret
 
 	def configureAcquisition(self, detector, scale):
@@ -1591,7 +1591,7 @@ class SignalHound(object):
 		# Note: Calling while in BB_RAW_PIPE mode will produce a bbDeviceNotConfiguredErr
 
 
-		self.log.info("Querying device for trace information.")
+		# self.log.info("Querying device for trace information.")
 
 		traceLen = ct.c_uint(0)
 		traceLenPnt = ct.pointer(traceLen)
@@ -1606,7 +1606,8 @@ class SignalHound(object):
 		err = self.dll.bbQueryTraceInfo(self.deviceHandle, traceLenPnt, binSizePnt, startPnt)
 
 		if err == self.bbStatus["bbNoError"]:
-			self.log.info("returned queryTraceInfo: %d, %f, %f" % (traceLen.value, binSize.value, start.value))
+			# self.log.info("returned queryTraceInfo: %d, %f, %f" % (traceLen.value, binSize.value, start.value))
+			pass
 		elif err == self.bbStatus["bbNullPtrErr"]:
 			raise IOError("Null pointer error!")
 		elif err == self.bbStatus["bbDeviceNotOpenErr"]:

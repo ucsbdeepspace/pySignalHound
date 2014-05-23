@@ -11,7 +11,7 @@ from scipy import signal
 
 
 GRAPH_GRID_Y_STEP = 5
-GRAPH_GRID_X_DIV_STEP = 5e6   # 5 Mhz per division
+GRAPH_GRID_X_DIV_STEP = 1e6   # 5 Mhz per division
 
 class GraphPanel(wx.Panel):
 
@@ -27,8 +27,8 @@ class GraphPanel(wx.Panel):
 		self.minVal = sys.maxint*1.0
 		self.maxVal = (sys.maxint-1)*-1.0
 
-		self.startFreq = None
-		self.stopFreq = None
+		self.startFreq = sys.maxint*1.0
+		self.stopFreq = (sys.maxint-1)*-1.0
 		self.binSize = None
 
 
@@ -111,11 +111,11 @@ class GraphPanel(wx.Panel):
 
 
 	def generateScatterList(self, xArr, yArr, arrSz):
-
 		pointList = []
-		w, h = self.mdc.GetSize()
+
+		dummy_w, h = self.mdc.GetSize()
 		for offset in xrange(arrSz):
-			tX = xArr[offset]
+			tX = xArr[offset+self.xOffset]
 			tY = h-yArr[offset]
 
 			pointList.append((tX, tY))
@@ -153,9 +153,18 @@ class GraphPanel(wx.Panel):
 		inData, dataInfo = inData
 
 		if all(dataInfo.keys()):  # If there is valid data for all keys in the dict
-			self.startFreq = dataInfo['startFreq']
-			self.stopFreq = dataInfo['startFreq'] + (dataInfo["binSize"] * dataInfo["numBins"])
+			stop = dataInfo['startFreq'] + (dataInfo["binSize"] * dataInfo["numBins"])
+			start = dataInfo['startFreq']
+			if start < self.startFreq:
+				self.startFreq = start
+			if stop > self.stopFreq:
+				self.stopFreq = stop
 			self.binSize = dataInfo["binSize"]
+
+			self.currentStart = start
+
+		self.totalXPoints = (self.stopFreq-self.startFreq) / dataInfo["binSize"]
+		print("Start", self.startFreq, "Stop", self.stopFreq, "X POints = ", self.totalXPoints)
 
 		skip = int(len(inData)/20000)
 		if skip != 0:
@@ -172,7 +181,8 @@ class GraphPanel(wx.Panel):
 		if dataHeight == 0:
 			dataHeight = 0.001
 		self.yScaleFactor = (yHeight-2.0) / dataHeight
-		self.xScaleFactor = (xWidth-2.0) / self.dataWidth
+		self.xScaleFactor = ((xWidth-2.0) / self.totalXPoints)
+		self.xOffset = int((self.currentStart-self.startFreq)/self.binSize)
 
 	def mapYValueToContext(self, value):
 
@@ -181,8 +191,8 @@ class GraphPanel(wx.Panel):
 		return value
 
 	def mapXValueToContext(self, value):
-
-		value = (value * self.xScaleFactor) + 1
+		#print("X = ", value, "offset", self.xOffset, "xScale", self.xScaleFactor)
+		value = ((value + self.xOffset) * self.xScaleFactor ) + 1
 		return value
 
 	def drawMouse(self):
@@ -204,31 +214,40 @@ class GraphPanel(wx.Panel):
 		dc.SetPen(self._penPastelGreen)
 		dc.DrawLine(xPos, 0, xPos, h)
 
-		perStep = float(w)/self.dataWidth
-		rangeStart, rangeStop = int(xPos/perStep), int((xPos+1)/perStep)
-		points = self.data[rangeStart:rangeStop]
-
-		self.preCalcScalingFactor(h, w)
-
-		dc.SetBrush(self._brushClear)
-
-		dc.SetPen(self._penHeavyRed)
-		scaledData = self.mapYValueToContext(points)
-		for point in scaledData:
-			dc.DrawCircle(xPos, h-point, 5)
-
-
-
-		cursorFreqStart, cursorFreqStop = (rangeStart*self.binSize+self.startFreq)/1000000, (rangeStop*self.binSize+self.startFreq)/1000000
-		numPointsAtFreq = scaledData.shape[0]
-		mouseText1 = "Cursor: %0.3f - %0.3f MHz. Data Points %i" % (cursorFreqStart, cursorFreqStop, numPointsAtFreq)
-		mouseText2 = "Min = %0.1f, Max = %0.1f, Mean = %0.1f" % (np.min(points), np.max(points), np.mean(points))
-
 
 		dc.SetTextForeground(self._colourWhite)
 
+		perStep = float(w)/self.totalXPoints
+		rangeStart, rangeStop = int(xPos/perStep-self.xOffset), int((xPos+1)/perStep-self.xOffset)
+		if rangeStart >= 0 and rangeStop < self.data.shape[0]:
+
+			points = self.data[rangeStart:rangeStop]
+
+			self.preCalcScalingFactor(h, w)
+
+			dc.SetBrush(self._brushClear)
+
+			dc.SetPen(self._penHeavyRed)
+			scaledData = self.mapYValueToContext(points)
+			for point in scaledData:
+				dc.DrawCircle(xPos, h-point, 5)
+
+			mouseText2 = "Min = %0.1f, Max = %0.1f, Mean = %0.1f" % (np.min(points), np.max(points), np.mean(points))
+
+
+
+
+
+			dc.DrawText(mouseText2, (w/4.5), h - 20)
+
+			numPointsAtFreq = scaledData.shape[0]
+		else:
+			numPointsAtFreq = 0
+
+		cursorFreqStart, cursorFreqStop = (rangeStart*self.binSize+self.currentStart)/1000000, (rangeStop*self.binSize+self.currentStart)/1000000
+
+		mouseText1 = "Cursor: %0.3f - %0.3f MHz. Data Points %i" % (cursorFreqStart, cursorFreqStop, numPointsAtFreq)
 		dc.DrawText(mouseText1, (w/4.5), h - 40)
-		dc.DrawText(mouseText2, (w/4.5), h - 20)
 
 
 	def redraw(self):
@@ -276,7 +295,8 @@ class GraphPanel(wx.Panel):
 
 			# print scaleFactor, self.minVal, self.maxVal, dataHeight
 
-			dataX = np.linspace(1, w-1, num=dataLen)
+
+			dataX = np.linspace(1, w-1, num=self.totalXPoints)
 
 			scaledData = self.mapYValueToContext(self.data)
 
@@ -326,13 +346,13 @@ class GraphPanel(wx.Panel):
 				dataRms = np.sqrt(np.mean((self.data-dataOffset)**2))
 
 
-				peakSensitivityModifier = 5
+				peakSensitivityModifier = 1.5
 				maxtab, dummy_mintab = peakFind.peakdet(self.data, dataRms*peakSensitivityModifier)
 
 				dc.SetFont(self._pointFont)
 				for x, y in maxtab:
 
-					pointText = " %0.3f Mhz,  %0.1f dB" % ((x*self.binSize+self.startFreq)/1000000, (y))
+					pointText = " %0.3f Mhz,  %0.1f dB" % ((x*self.binSize+self.currentStart)/1000000, (y))
 
 					x = self.mapXValueToContext(x)
 					y = self.mapYValueToContext(y)

@@ -73,11 +73,11 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 
 				log.info("Have connection %s from %s", sok, addr)
 			except socket.timeout:
-				if not dataQueue.empty():
+				while not dataQueue.empty():
 					tmp = dataQueue.get()
 
 					if "settings" in tmp:
-						log.info("Setting plot diagnostics for ")
+						# log.info("Setting plot diagnostics for ")
 						dat = tmp["settings"]
 						startFreq = dat["ret-start-freq"]
 						binSize = dat["arr-bin-size"]
@@ -86,14 +86,14 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 
 		if sok != None:
 			if dataQueue.empty():
-				time.sleep(0.005)
+				time.sleep(0.001)
 			else:
 				# log.info("Sending plot data out socket")
 				tmp = dataQueue.get()
 
 
 				if "settings" in tmp:
-					log.info("Setting plot diagnostics for ")
+					# log.info("Setting plot diagnostics for ")
 					dat = tmp["settings"]
 					startFreq = dat["ret-start-freq"]
 					binSize = dat["arr-bin-size"]
