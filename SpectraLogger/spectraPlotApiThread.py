@@ -47,7 +47,6 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 	# Needs to be blocking, so we don't get non-blocking errors on transmission for LARGE data-chunks
 	conn.settimeout(CONN_TIMEOUT)
 
-	data = None
 	sok = None
 	dataChunks = 0
 
@@ -77,7 +76,6 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 					tmp = dataQueue.get()
 
 					if "settings" in tmp:
-						# log.info("Setting plot diagnostics for ")
 						dat = tmp["settings"]
 						startFreq = dat["ret-start-freq"]
 						binSize = dat["arr-bin-size"]
@@ -99,13 +97,17 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 					binSize = dat["arr-bin-size"]
 					numBins = dat["arr-size"]
 
-				elif "max" in tmp:
+				if "data" in tmp and "info" in tmp and "max" in tmp["data"]:
+					dat = tmp["info"]
+					startFreq = dat["ret-start-freq"]
+					binSize = dat["arr-bin-size"]
+					numBins = dat["arr-size"]
 
-					if runningSum.shape != tmp["max"].shape:
-						runningSum = np.zeros_like(tmp["max"])
+					if runningSum.shape != tmp["data"]["max"].shape:
+						runningSum = np.zeros_like(tmp["data"]["max"])
 						runningSumItems = 0
 
-					runningSum += tmp["max"]
+					runningSum += tmp["data"]["max"]
 					runningSumItems += 1
 				else:
 					log.error("WAT? Unknown packet!")
@@ -172,7 +174,7 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 				loop_timer = now
 				dataChunks = 0
 			else:
-				log.info("Elapsed Time = %0.5f, No chunks processed?", delta)
+				# log.info("Elapsed Time = %0.5f, No chunks processed?", delta)
 				loop_timer = now
 
 

@@ -112,18 +112,20 @@ class InternalSweepAcqThread(object):
 
 		temperature = self.sh.queryDeviceDiagnostics()["temperature"]
 
-		lastTime = time.time()
-
 		while 1:
 			try:
 
 
 				trace = self.sh.fetchTrace()
-				dataQueue.put(trace)
-				plotQueue.put(trace)
-				confTemp = self.sh.getCurrentAcquisitionSettings()
-				plotQueue.put({"settings" : confTemp})
+				traceInfo = self.sh.queryTraceInfo()
+				dataDict = {
+								"info": traceInfo,
+								"data": trace
+							}
 
+
+				dataQueue.put(dataDict)
+				plotQueue.put(dataDict)
 
 				del(trace)
 
@@ -150,7 +152,10 @@ class InternalSweepAcqThread(object):
 				self.sh = SignalHound()
 				self.startAcquisition(dataQueue, dataQueue)
 
-			if loops > 0  and loops % ACQ_BIN_SAMPLES == 0:
+
+			loops += 1
+
+			if loops % ACQ_BIN_SAMPLES == 0:
 				print("Should retune frontend!")
 				self.sh.abort()
 				self.startAcquisition(dataQueue, dataQueue)
@@ -161,7 +166,7 @@ class InternalSweepAcqThread(object):
 				now = time.time()
 				delta = now-loop_timer
 				freq = 1 / (delta / PRINT_LOOP_CNT)
-				self.log.info("Elapsed Time = %0.5f, Frequency = %s", delta, freq)
+				# self.log.info("Elapsed Time = %0.5f, Frequency = %s", delta, freq)
 				loop_timer = now
 
 			if loops % CAL_CHK_LOOP_CNT == 0:
@@ -178,7 +183,6 @@ class InternalSweepAcqThread(object):
 				else:
 					self.log.info("Temperature deviation = %f. Not doing recal, since drift < 2C", abs(temperature - temptmp))
 
-			loops += 1
 
 			if ctrlNs.run == False:
 				self.log.info("Stopping Acq-thread!")

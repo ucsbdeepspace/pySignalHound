@@ -18,7 +18,7 @@ class GraphPanel(wx.Panel):
 	def __init__(self,  *args, **kwds):
 		wx.Panel.__init__(self, *args, **kwds)
 
-		self.data = np.array([])
+		self.data = {}
 
 		self.mdc = None # memory dc to draw off-screen
 		self.mouseDc = None # fast-update drawing buffer
@@ -163,17 +163,17 @@ class GraphPanel(wx.Panel):
 
 			self.currentStart = start
 
-		self.totalXPoints = (self.stopFreq-self.startFreq) / dataInfo["binSize"]
-		print("Start", self.startFreq, "Stop", self.stopFreq, "X POints = ", self.totalXPoints)
+			self.totalXPoints = (self.stopFreq-self.startFreq) / dataInfo["binSize"]
+			print("Start", self.startFreq, "Stop", self.stopFreq, "X POints = ", self.totalXPoints)
 
-		skip = int(len(inData)/20000)
-		if skip != 0:
-			# Correct the bin size for the skip setting
-			self.binSize = self.binSize * skip
-			inData = inData[::skip]
+			skip = int(len(inData)/20000)
+			if skip != 0:
+				# Correct the bin size for the skip setting
+				self.binSize = self.binSize * skip
+				inData = inData[::skip]
 
-		self.data = inData
-		self.redraw()
+			self.data[start] = inData
+			self.redraw()
 
 	def preCalcScalingFactor(self, yHeight, xWidth):
 
@@ -207,7 +207,10 @@ class GraphPanel(wx.Panel):
 		if self.data == None:
 			return
 
-		self.dataWidth = self.data.shape[0]
+		if not self.data:
+			return
+
+		self.dataWidth = self.data[self.currentStart].shape[0]
 		if self.dataWidth == 0:
 			return
 
@@ -219,9 +222,9 @@ class GraphPanel(wx.Panel):
 
 		perStep = float(w)/self.totalXPoints
 		rangeStart, rangeStop = int(xPos/perStep-self.xOffset), int((xPos+1)/perStep-self.xOffset)
-		if rangeStart >= 0 and rangeStop < self.data.shape[0]:
+		if rangeStart >= 0 and rangeStop < self.data[self.currentStart].shape[0]:
 
-			points = self.data[rangeStart:rangeStop]
+			points = self.data[self.currentStart][rangeStart:rangeStop]
 
 			self.preCalcScalingFactor(h, w)
 
@@ -275,13 +278,13 @@ class GraphPanel(wx.Panel):
 		#print arr
 		#print self.rectDims
 
-		if self.data.shape != (0,):
-			# print "Meh",  self.data.shape
-			# print self.data.shape
-			dataLen = self.data.shape[0]
+		if self.data and self.data[self.currentStart].shape != (0,):
+			# print "Meh",  self.data[self.currentStart].shape
+			# print self.data[self.currentStart].shape
+			dataLen = self.data[self.currentStart].shape[0]
 
-			dataMin = self.data.min()
-			dataMax = self.data.max()
+			dataMin = self.data[self.currentStart].min()
+			dataMax = self.data[self.currentStart].max()
 
 			if dataMin < self.minVal:
 				self.minVal = (dataMin-5.0) + (5-(dataMin % 5))
@@ -289,7 +292,7 @@ class GraphPanel(wx.Panel):
 			if dataMax > self.maxVal:
 				self.maxVal = (dataMax+5.0) - (dataMax % 5)
 
-			self.dataWidth = self.data.shape[0]
+			self.dataWidth = self.data[self.currentStart].shape[0]
 
 			self.preCalcScalingFactor(h, w)
 
@@ -298,14 +301,14 @@ class GraphPanel(wx.Panel):
 
 			dataX = np.linspace(1, w-1, num=self.totalXPoints)
 
-			scaledData = self.mapYValueToContext(self.data)
+			scaledData = self.mapYValueToContext(self.data[self.currentStart])
 
 			# pointList = self.generateScatterList(dataX, scaledData, dataLen, dc.GetSize())
 			# pointList.sort()
 			# dc.DrawPointList(pointList, self._penWhite)
 
 
-			gridList, xDivisionQuantity = self.generateGridList()
+			gridList, self.xDivisionQuantity = self.generateGridList()
 			dc.DrawLineList(gridList, pens=self._penPastelBlue)
 
 
@@ -322,47 +325,52 @@ class GraphPanel(wx.Panel):
 			dc.DrawText("Pk-Pk: %0.8fdB" % (self.maxVal-self.minVal), w-170, 5)
 			dc.DrawText("Y-Grid: %0.2fdB per div" % GRAPH_GRID_Y_STEP, w-170, h - 20)
 
+			self.drawPlotLabels()
 
-			if all((self.startFreq, self.stopFreq)):
+	def drawPlotLabels(self):
+		dc = self.mdc
+		w, h = dc.GetSize()
 
-				strtText = "Start: %0.3f MHz" % ((self.startFreq)/1000000)
-				stopText = "Stop: %0.3f MHz" % ((self.stopFreq)/1000000)
-				spanText = "Span: %0.3f MHz" % ((self.stopFreq-self.startFreq)/1000000)
-				strtTextX, dummy_textY = dc.GetTextExtent(strtText)
-				stopTextX, dummy_textY = dc.GetTextExtent(stopText)
-				spanTextX, dummy_textY = dc.GetTextExtent(spanText)
-				dc.DrawText(strtText, (w/4)-(strtTextX/2), 5)
-				dc.DrawText(stopText, ((w/4)*3)-(stopTextX/2), 5)
-				dc.DrawText(spanText, (w/2)-(spanTextX/2), 5)
+		if all((self.startFreq, self.stopFreq)):
 
-				dc.DrawText("X-Grid: %0.3f kHz per div" % (((self.stopFreq-self.startFreq) / xDivisionQuantity)/1000), w-400, h-20)
+			strtText = "Start: %0.3f MHz" % ((self.startFreq)/1000000)
+			stopText = "Stop: %0.3f MHz" % ((self.stopFreq)/1000000)
+			spanText = "Span: %0.3f MHz" % ((self.stopFreq-self.startFreq)/1000000)
+			strtTextX, dummy_textY = dc.GetTextExtent(strtText)
+			stopTextX, dummy_textY = dc.GetTextExtent(stopText)
+			spanTextX, dummy_textY = dc.GetTextExtent(spanText)
+			dc.DrawText(strtText, (w/4)-(strtTextX/2), 5)
+			dc.DrawText(stopText, ((w/4)*3)-(stopTextX/2), 5)
+			dc.DrawText(spanText, (w/2)-(spanTextX/2), 5)
 
-
-				dc.SetBrush(self._brushClear)
-				dc.SetPen(self._penPastelRed)
-
-				dataOffset = np.mean(self.data)
-
-				dataRms = np.sqrt(np.mean((self.data-dataOffset)**2))
+			dc.DrawText("X-Grid: %0.3f kHz per div" % (((self.stopFreq-self.startFreq) / self.xDivisionQuantity)/1000), w-400, h-20)
 
 
-				peakSensitivityModifier = 1.5
-				maxtab, dummy_mintab = peakFind.peakdet(self.data, dataRms*peakSensitivityModifier)
+			dc.SetBrush(self._brushClear)
+			dc.SetPen(self._penPastelRed)
 
-				dc.SetFont(self._pointFont)
-				for x, y in maxtab:
+			dataOffset = np.mean(self.data[self.currentStart])
 
-					pointText = " %0.3f Mhz,  %0.1f dB" % ((x*self.binSize+self.currentStart)/1000000, (y))
-
-					x = self.mapXValueToContext(x)
-					y = self.mapYValueToContext(y)
-					circX, circY = x, h-y
-					dc.DrawCircle(circX, circY, 5)
+			dataRms = np.sqrt(np.mean((self.data[self.currentStart]-dataOffset)**2))
 
 
-					labelX, labelY = dc.GetTextExtent(pointText)
+			peakSensitivityModifier = 1.5
+			maxtab, dummy_mintab = peakFind.peakdet(self.data[self.currentStart], dataRms*peakSensitivityModifier)
 
-					dc.DrawRotatedText(pointText, circX-(labelY/2), circY-8, 90)
+			dc.SetFont(self._pointFont)
+			for x, y in maxtab:
+
+				pointText = " %0.3f Mhz,  %0.1f dB" % ((x*self.binSize+self.currentStart)/1000000, (y))
+
+				x = self.mapXValueToContext(x)
+				y = self.mapYValueToContext(y)
+				circX, circY = x, h-y
+				dc.DrawCircle(circX, circY, 5)
+
+
+				labelX, labelY = dc.GetTextExtent(pointText)
+
+				dc.DrawRotatedText(pointText, circX-(labelY/2), circY-8, 90)
 
 
 

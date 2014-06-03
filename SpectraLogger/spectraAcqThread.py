@@ -67,13 +67,18 @@ def sweepSource(dataQueues, ctrlNs, printQueue):
 
 	temperature = sh.queryDeviceDiagnostics()["temperature"]
 
-	lastTime = time.time()
-
 	while 1:
 		try:
 			trace = sh.fetchTrace()
-			dataQueue.put(trace)
-			plotQueue.put(trace)
+			traceInfo = sh.queryTraceInfo()
+			dataDict = {
+							"info": traceInfo,
+							"data": trace
+						}
+
+
+			dataQueue.put(dataDict)
+			plotQueue.put(dataDict)
 
 
 			del(trace)
@@ -96,13 +101,13 @@ def sweepSource(dataQueues, ctrlNs, printQueue):
 			log.error("Hardware shut down, completely re-initializing device interface!")
 			# sys.exit()
 			sh = SignalHound()
-			startAcquisition(sh, dataQueue)
+			startAcquisition(sh, dataQueue, plotQueue)
 
 		if loops % PRINT_LOOP_CNT == 0:
 			now = time.time()
 			delta = now-loop_timer
 			freq = 1 / (delta / PRINT_LOOP_CNT)
-			log.info("Elapsed Time = %0.5f, Frequency = %s", delta, freq)
+			# log.info("Elapsed Time = %0.5f, Frequency = %s", delta, freq)
 			loop_timer = now
 
 		if loops % CAL_CHK_LOOP_CNT == 0:
@@ -113,7 +118,7 @@ def sweepSource(dataQueues, ctrlNs, printQueue):
 			if abs(temperature - temptmp) > 2.0:    # Temperature deviations of > 2° cause IF shifts. Therefore, we do a re-cal if they're detected
 				dataQueue.put({"status" : "Recalibrating IF"})
 				sh.selfCal()
-				startAcquisition(sh, dataQueue)
+				startAcquisition(sh, dataQueue, plotQueue)
 				log.warning("Temperature changed > 2.0 C. Delta is %f. Recalibrated!", abs(temperature - temptmp))
 				temperature = temptmp
 			else:
