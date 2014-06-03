@@ -76,10 +76,10 @@ def logSweeps(dataQueue, ctrlNs, printQueue, test=False):
 
 
 	# Main dataset - compressed, chunked, checksummed.
-	dset = out.create_dataset('Spectrum_Data', (0,1), maxshape=(None,1), dtype = dTypeStructure, chunks=True, compression="gzip", fletcher32=True, shuffle=True)
+	dset = out.create_dataset('Spectrum_Data', (0, ), maxshape=(None, ), dtype = dTypeStructure, chunks=True, compression="gzip", fletcher32=True, shuffle=True)
 
 	# Cal and system status log dataset.
-	calset = out.create_dataset('Acq_info', (0,1), maxshape=(None,None), dtype=h5py.new_vlen(str))
+	calset = out.create_dataset('Acq_info', (0, ), maxshape=(None, ), dtype=h5py.new_vlen(str))
 
 
 
@@ -138,7 +138,7 @@ def logSweeps(dataQueue, ctrlNs, printQueue, test=False):
 						dset.resize(curSize+1, axis=0)
 
 						# Yo dwag, I herd u liek arrays, so I put an array in your array in your array in your array in your array in your array in your array in your array
-						dset[curSize, 0] = (saveTime, startFreq, binSize, runningSumItems, arr)
+						dset[curSize] = (saveTime, startFreq, binSize, runningSumItems, arr)
 
 						out.flush()  # FLush early, flush often
 						# Probably a bad idea without a SSD
@@ -178,7 +178,7 @@ def logSweeps(dataQueue, ctrlNs, printQueue, test=False):
 				dataPik = cPickle.dumps(data)
 
 				calSz = calset.shape[0]
-				calset.resize([calSz+1, 1])
+				calset.resize([calSz+1,])
 				calset[calSz,...] = dataPik
 
 				# log.info("Status message - %s.", tmp)

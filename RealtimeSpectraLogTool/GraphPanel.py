@@ -43,10 +43,12 @@ class GraphPanel(wx.Panel):
 		self._colourPastelBlue	= wx.Colour(100, 100, 200)
 		self._colourPastelRed	= wx.Colour(250, 100, 100)
 		self._colourPastelGreen	= wx.Colour(100, 250, 100)
+		self._colourGrey		= wx.Colour(150, 150, 150)
 		self._colourRed			= wx.Colour(255,   0,   0)
 
 		self._penBlack			= wx.Pen(self._colourBlack)
 		self._penWhite			= wx.Pen(self._colourWhite)
+		self._penGrey			= wx.Pen(self._colourGrey)
 		self._penPastelBlue		= wx.Pen(self._colourPastelBlue)
 		self._penPastelRed		= wx.Pen(self._colourPastelRed, width=2)
 		self._penPastelGreen	= wx.Pen(self._colourPastelGreen)
@@ -182,14 +184,22 @@ class GraphPanel(wx.Panel):
 			self.data[start] = inData
 			self.redraw()
 
-	def preCalcScalingFactor(self, yHeight, xWidth):
+	def preCalcScalingFactor(self, dc, startFreqOverride=None):
+
+		xWidth, yHeight = dc.GetSize()
 
 		dataHeight = float(self.maxVal - self.minVal)
 		if dataHeight == 0:
 			dataHeight = 0.001
 		self.yScaleFactor = (yHeight-2.0) / dataHeight
 		self.xScaleFactor = ((xWidth-2.0) / self.totalXPoints)
-		self.xOffset = int((self.currentStart-self.startFreq)/self.binSize)
+
+		if not startFreqOverride:
+			curSt = self.currentStart
+		else:
+			curSt = startFreqOverride
+
+		self.xOffset = int((curSt-self.startFreq)/self.binSize)
 
 	def mapYValueToContext(self, value):
 
@@ -233,7 +243,7 @@ class GraphPanel(wx.Panel):
 
 			points = self.data[self.currentStart][rangeStart:rangeStop]
 
-			self.preCalcScalingFactor(h, w)
+			self.preCalcScalingFactor(dc)
 
 			dc.SetBrush(self._brushClear)
 
@@ -259,6 +269,56 @@ class GraphPanel(wx.Panel):
 		mouseText1 = "Cursor: %0.3f - %0.3f MHz. Data Points %i" % (cursorFreqStart, cursorFreqStop, numPointsAtFreq)
 		dc.DrawText(mouseText1, (w/4.5), h - 40)
 
+
+	def drawGraticule(self, dc):
+
+		gridList, self.xDivisionQuantity = self.generateGridList()
+		dc.DrawLineList(gridList, pens=self._penPastelBlue)
+
+
+	def drawData(self, dc, data, linePen=None):
+
+		w, dummy_h = dc.GetSize()
+
+		# print "Meh",  self.data[self.currentStart].shape
+		# print self.data[self.currentStart].shape
+		dataLen = data.shape[0]
+
+		dataMin = data.min()
+		dataMax = data.max()
+
+		if dataMin < self.minVal:
+			self.minVal = (dataMin-5.0) + (5-(dataMin % 5))
+
+		if dataMax > self.maxVal:
+			self.maxVal = (dataMax+5.0) - (dataMax % 5)
+
+		self.dataWidth = data.shape[0]
+
+
+		# print scaleFactor, self.minVal, self.maxVal, dataHeight
+
+
+		dataX = np.linspace(1, w-1, num=self.totalXPoints)
+
+		scaledData = self.mapYValueToContext(data)
+
+		# pointList = self.generateScatterList(dataX, scaledData, dataLen, dc.GetSize())
+		# pointList.sort()
+		# dc.DrawPointList(pointList, self._penWhite)
+
+
+
+
+		pointList = self.generateScatterList(dataX, scaledData, dataLen)
+		# pointList.sort()
+
+		if not linePen:
+			dc.SetPen(self._penWhite)
+		else:
+			dc.SetPen(linePen)
+
+		dc.DrawLines(pointList)
 
 	def redraw(self):
 		# do the actual drawing on the memory dc here
@@ -286,44 +346,19 @@ class GraphPanel(wx.Panel):
 		#print self.rectDims
 
 		if self.data and self.data[self.currentStart].shape != (0,):
-			# print "Meh",  self.data[self.currentStart].shape
-			# print self.data[self.currentStart].shape
-			dataLen = self.data[self.currentStart].shape[0]
 
-			dataMin = self.data[self.currentStart].min()
-			dataMax = self.data[self.currentStart].max()
+			self.drawGraticule(dc)
 
-			if dataMin < self.minVal:
-				self.minVal = (dataMin-5.0) + (5-(dataMin % 5))
+			for key, data in self.data.iteritems():
+				if key != self.currentStart:
 
-			if dataMax > self.maxVal:
-				self.maxVal = (dataMax+5.0) - (dataMax % 5)
-
-			self.dataWidth = self.data[self.currentStart].shape[0]
-
-			self.preCalcScalingFactor(h, w)
-
-			# print scaleFactor, self.minVal, self.maxVal, dataHeight
+					self.preCalcScalingFactor(dc, startFreqOverride=key)
+					self.drawData(dc, data, linePen=self._penGrey)
 
 
-			dataX = np.linspace(1, w-1, num=self.totalXPoints)
 
-			scaledData = self.mapYValueToContext(self.data[self.currentStart])
-
-			# pointList = self.generateScatterList(dataX, scaledData, dataLen, dc.GetSize())
-			# pointList.sort()
-			# dc.DrawPointList(pointList, self._penWhite)
-
-
-			gridList, self.xDivisionQuantity = self.generateGridList()
-			dc.DrawLineList(gridList, pens=self._penPastelBlue)
-
-
-			pointList = self.generateScatterList(dataX, scaledData, dataLen)
-			# pointList.sort()
-
-			dc.SetPen(self._penWhite)
-			dc.DrawLines(pointList)
+			self.preCalcScalingFactor(dc)
+			self.drawData(dc, self.data[self.currentStart])
 
 
 			dc.DrawText("Max: %0.5fdB" % self.maxVal, 10, 5)
@@ -333,6 +368,7 @@ class GraphPanel(wx.Panel):
 			dc.DrawText("Y-Grid: %0.2fdB per div" % GRAPH_GRID_Y_STEP, w-170, h - 20)
 
 			self.drawPlotLabels()
+
 
 	def drawPlotLabels(self):
 		dc = self.mdc
