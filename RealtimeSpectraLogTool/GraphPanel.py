@@ -31,6 +31,7 @@ class GraphPanel(wx.Panel):
 		self.stopFreq = (sys.maxint-1)*-1.0
 		self.binSize = None
 
+		self.peakSensitivityModifier = 5.5
 
 		self.Bind(wx.EVT_SIZE, self.onSize)
 		self.Bind(wx.EVT_ERASE_BACKGROUND, self.onErase)
@@ -67,6 +68,12 @@ class GraphPanel(wx.Panel):
 		self.redraw_timer = wx.Timer(self)
 		self.Bind(wx.EVT_TIMER, self.on_redraw_timer, self.redraw_timer)
 		self.redraw_timer.Start(1000/30)
+
+	def changePeakSense(self, peakSense):
+		if peakSense < 1 or peakSense > 10:
+			raise ValueError("wat")
+		self.peakSensitivityModifier = peakSense
+
 
 	def onSize(self, dummy_event):
 		# re-create memory dc to fill window
@@ -354,8 +361,8 @@ class GraphPanel(wx.Panel):
 			dataRms = np.sqrt(np.mean((self.data[self.currentStart]-dataOffset)**2))
 
 
-			peakSensitivityModifier = 1.5
-			maxtab, dummy_mintab = peakFind.peakdet(self.data[self.currentStart], dataRms*peakSensitivityModifier)
+
+			maxtab, dummy_mintab = peakFind.peakdet(self.data[self.currentStart], dataRms*self.peakSensitivityModifier)
 
 			dc.SetFont(self._pointFont)
 			for x, y in maxtab:

@@ -34,7 +34,6 @@ class SpectrumFrame(wx.Frame):
 
 
 		self.__set_properties()
-		self.__createLayoutObjs()
 		self.__do_layout()
 
 
@@ -61,18 +60,24 @@ class SpectrumFrame(wx.Frame):
 
 
 
+	def __createHeader(self):
 
-	def __createLayoutObjs(self):
-
-		self.DestroyChildren()			#Kill the Children!
+		headerSizer = wx.BoxSizer(wx.HORIZONTAL)
 
 		descText = "SignalHound Spectrum Monitoring tool"
 
-		self.headerDescriptionLabel = wx.StaticText(self, -1, descText)
-		self.headerDescriptionLabel.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL, 0, "MS Shell Dlg 2"))
+		headerDescriptionLabel = wx.StaticText(self, -1, descText)
+		headerDescriptionLabel.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL, 0, "MS Shell Dlg 2"))
 
+		peakSenseSlider = wx.Slider(self, -1, minValue=10, maxValue=80, value=55)
+		self.Bind(wx.EVT_SCROLL, self.changePeakFindSense, peakSenseSlider)
 
-		#print "Starting Up..."
+		headerSizer.Add(headerDescriptionLabel)
+		headerSizer.Add((10,10))
+		headerSizer.Add(peakSenseSlider, flag=wx.EXPAND, proportion=1)
+
+		return headerSizer
+
 
 	def __do_layout(self):
 
@@ -80,7 +85,7 @@ class SpectrumFrame(wx.Frame):
 		self.mainWindowSizer = wx.BoxSizer(wx.VERTICAL)
 
 
-		self.mainWindowSizer.Add(self.headerDescriptionLabel, 0, wx.ALL, 5)
+		self.mainWindowSizer.Add(self.__createHeader(), 0, flag=wx.ALL | wx.EXPAND, border=5)
 
 		self.visPanel = vizFrame.GraphPanel(self, -1)
 
@@ -95,6 +100,8 @@ class SpectrumFrame(wx.Frame):
 
 		#print "Starting Up..."
 
+	def changePeakFindSense(self, event):
+		self.visPanel.changePeakSense(event.GetPosition()/10.0)
 
 
 	def updateGUI(self, dummy_event): # wxGlade: MainW.<event_handler>		Main Polling Loop
