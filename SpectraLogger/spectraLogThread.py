@@ -71,12 +71,13 @@ def logSweeps(dataQueue, ctrlNs, printQueue, test=False):
 		arrWidth = 20
 
 
-	dTypeStructure = [("TimeStamp", "f8"), ("StartFreq", "f4"), ("BinSize", "f4"), ("NumScans", "f4"), ("data", "f4", arrWidth)]
-	dType = np.dtype(dTypeStructure)
+	# dTypeStructure = [("TimeStamp", "f8"), ("StartFreq", "f4"), ("BinSize", "f4"), ("NumScans", "f4"), ("data", "f4", arrWidth)]
+	# dType = np.dtype(dTypeStructure)
 
+	arrWidth = arrWidth + 1 + 1 + 1 + 1 # Width of the data array, plus - TimeStamp, StartFreq, BinSize, NumScans
 
 	# Main dataset - compressed, chunked, checksummed.
-	dset = out.create_dataset('Spectrum_Data', (0, ), maxshape=(None, ), dtype = dTypeStructure, chunks=True, compression="gzip", fletcher32=True, shuffle=True)
+	dset = out.create_dataset('Spectrum_Data', (0, arrWidth), maxshape=(None, arrWidth), dtype = np.float64, chunks=True, compression="gzip", fletcher32=True, shuffle=True)
 
 	# Cal and system status log dataset.
 	calset = out.create_dataset('Acq_info', (0, ), maxshape=(None, ), dtype=h5py.new_vlen(str))
@@ -137,8 +138,8 @@ def logSweeps(dataQueue, ctrlNs, printQueue, test=False):
 						# print("Current shape = ", dset.shape)
 						dset.resize(curSize+1, axis=0)
 
-						# Yo dwag, I herd u liek arrays, so I put an array in your array in your array in your array in your array in your array in your array in your array
-						dset[curSize] = (saveTime, startFreq, binSize, runningSumItems, arr)
+						flatten = lambda *args: args
+						dset[curSize] = flatten(saveTime, startFreq, binSize, runningSumItems, *arr)
 
 						out.flush()  # FLush early, flush often
 						# Probably a bad idea without a SSD

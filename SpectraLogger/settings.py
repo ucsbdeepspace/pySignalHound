@@ -13,11 +13,11 @@
 
 # Center frequency of the acquisition scan.
 # ACQ_FREQ               = H_FLIP_FREQ + 2.5e6
-ACQ_FREQ               = 200e6
+ACQ_FREQ               = 175e6
 
 # The ACQ_SPAN is the width of the acquisiton window. For "real-time" mode, the MAXIMUM width is 20 Mhz. For "sweeping" mode, it can be any integer.
 # ACQ_SPAN               = 20e6
-ACQ_SPAN               = 200e6
+ACQ_SPAN               = 300e6
 
 # Reference level of the acquisition
 ACQ_REF_LEVEL_DB       = 15
@@ -81,7 +81,7 @@ ACQ_TYPE               = "real-time-sweeping"
 # Don't actually use 1 (100%). Shit would break.
 ACQ_OVERLAP            = 0.5
 # Number of scans to take at each frequency
-ACQ_BIN_SAMPLES        = 300
+ACQ_BIN_SAMPLES        = 1000
 
 
 # The acquired data modes. Valid options are "average" and "min-max"
@@ -115,6 +115,6 @@ CAL_CHK_LOOP_CNT       = 5000
 NUM_AVERAGE            = 100
 
 # Number of acquisition sweeps averaged over for each data-array fet to the plotting system
-# 60 divided by NUM_AVERAGE yields Hz
+# ~60 divided by NUM_AVERAGE yields Hz
 NUM_PLOT_AVERAGE       = 30
 
