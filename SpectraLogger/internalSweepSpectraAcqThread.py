@@ -160,7 +160,7 @@ class InternalSweepAcqThread(object):
 				self.sh.abort()
 				self.startAcquisition(dataQueue, dataQueue)
 
-				print("Current acq mode = ", self.sh.queryTraceInfo())
+				# print("Current acq mode = ", self.sh.queryTraceInfo())
 
 			if loops % PRINT_LOOP_CNT == 0:
 				now = time.time()

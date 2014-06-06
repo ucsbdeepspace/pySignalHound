@@ -33,26 +33,12 @@ import os
 import os.path
 import cPickle
 
-from settings import NUM_AVERAGE
+from settings import NUM_AVERAGE, FILE_ROTATION_INTERVAL
+
 
 def logSweeps(dataQueue, ctrlNs, printQueue, test=False):
-
-
 	log = logging.getLogger("Main.LogProcess")
 	logSetup.initLogging(printQ = printQueue)
-	loop_timer = time.time()
-
-	logName = time.strftime("Datalog - %Y %m %d, %a, %H-%M-%S.h5", time.localtime())
-	logPath = time.strftime("../Data/%Y/%m/%d/", time.localtime())
-
-	if not os.path.exists(logPath):
-		os.makedirs(logPath)
-
-	logFQPath = os.path.join(logPath, logName)
-
-	log.info("Logging data to %s", logFQPath)
-	out = h5py.File(logFQPath, "w")
-	startFreq = 0
 
 	# the size of the acquisiton array can vary. Therefore, we wait for the acq thread to send a message containing
 	# the array size before allocating the HDF5 array.
@@ -69,6 +55,35 @@ def logSweeps(dataQueue, ctrlNs, printQueue, test=False):
 					break
 	else:
 		arrWidth = 20
+
+
+	while ctrlNs.acqRunning:
+		logIter(dataQueue, ctrlNs, printQueue, arrWidth, test)
+
+	log.info("Log-thread closing queues!")
+	dataQueue.close()
+	dataQueue.join_thread()
+	log.info("Log-thread exiting!")
+	printQueue.close()
+	printQueue.join_thread()
+
+def logIter(dataQueue, ctrlNs, printQueue, arrWidth, test=False):
+
+
+	log = logging.getLogger("Main.LogProcess")
+	loop_timer = time.time()
+
+	logName = time.strftime("Datalog - %Y %m %d, %a, %H-%M-%S.h5", time.localtime())
+	logPath = time.strftime("../Data/%Y/%m/%d/", time.localtime())
+
+	if not os.path.exists(logPath):
+		os.makedirs(logPath)
+
+	logFQPath = os.path.join(logPath, logName)
+
+	log.info("Logging data to %s", logFQPath)
+	out = h5py.File(logFQPath, "w")
+	startFreq = 0
 
 
 	# dTypeStructure = [("TimeStamp", "f8"), ("StartFreq", "f4"), ("BinSize", "f4"), ("NumScans", "f4"), ("data", "f4", arrWidth)]
@@ -166,7 +181,9 @@ def logSweeps(dataQueue, ctrlNs, printQueue, test=False):
 						runningSumItems = 1
 
 
-
+					if time.time() - loop_timer > FILE_ROTATION_INTERVAL:
+						log.info("Rotating log files")
+						break
 
 
 			elif "settings" in tmp or "status" in tmp:
@@ -196,12 +213,6 @@ def logSweeps(dataQueue, ctrlNs, printQueue, test=False):
 
 	out.close()
 
-	log.info("Log-thread closing queues!")
-	dataQueue.close()
-	dataQueue.join_thread()
-	log.info("Log-thread exiting!")
-	printQueue.close()
-	printQueue.join_thread()
 
 def dotest():
 	print("Starting test")

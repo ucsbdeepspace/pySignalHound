@@ -118,3 +118,6 @@ NUM_AVERAGE            = 100
 # ~60 divided by NUM_AVERAGE yields Hz
 NUM_PLOT_AVERAGE       = 30
 
+# File rotation interval in seconds:
+FILE_ROTATION_INTERVAL = 60 * 60 # 1 hour
+
