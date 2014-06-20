@@ -47,7 +47,7 @@ All the behaviour of `spectraLog.py` is controlled by the configuration variable
 
 Currently, there is also a prototype visualization tool as well (`main.py` in the `RealtimeSpectraLogTool` directory):
 
-[!Image 1](http://fake-name.github.io/pySignalHound/img/Demo1.png)
+![Image 1](http://fake-name.github.io/pySignalHound/img/Demo1.png)
 
 The visualization tool connects to a running acquisition session, and retreives scans from the currently running acquisition. The advantage of this is that it can connect and disconnect from a running acquisition, all without interrupting the actual data-logging in the acquisition.   
 
@@ -58,7 +58,7 @@ The visualization tool also generates some simple statistics for the  acquired d
 Lastly, it features a mouse-cursor that gives the minimum, maximum, and mean value of the data under the mouse cursor in realtime, as well as highlighting the data-points in the column that is mouse-overed (each column is 1 pixel, and given the fact that displays are typically 1000-3000 pixels wide, and the sweeps are generally ~16Kitems, each pixel "column" has >10 items).  
 The cursor is the vertical green line in the screenshots.
 
-[!Image 2](http://fake-name.github.io/pySignalHound/img/Demo2.png)
+![Image 2](http://fake-name.github.io/pySignalHound/img/Demo2.png)
 
 The visualization also has extensions to support the custom pseudo-sweeping mode that is implemented in `internalSweepSpectraAcqThread.py`. This is a special acquisition mode that is implemented for some of the astrophysucs data-acquisition we want to do. Basically, it runs the hardware in `realtime` mode, but every `n` scans in realtime mode, it halts the acquisition, changes the frequency, and starts acquiring in realtime at the new frequency. It has configurable overlap for each frequency step. as well as configurable frequency and span.
 
