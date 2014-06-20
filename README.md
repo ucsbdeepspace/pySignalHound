@@ -58,11 +58,25 @@ The visualization tool also generates some simple statistics for the  acquired d
 Lastly, it features a mouse-cursor that gives the minimum, maximum, and mean value of the data under the mouse cursor in realtime, as well as highlighting the data-points in the column that is mouse-overed (each column is 1 pixel, and given the fact that displays are typically 1000-3000 pixels wide, and the sweeps are generally ~16Kitems, each pixel "column" has >10 items).  
 The cursor is the vertical green line in the screenshots.
 
+Each datapoint is highlighted with a red circle. 
+
 ![Image 2](http://fake-name.github.io/pySignalHound/img/Demo2.png)
 
 The visualization also has extensions to support the custom pseudo-sweeping mode that is implemented in `internalSweepSpectraAcqThread.py`. This is a special acquisition mode that is implemented for some of the astrophysucs data-acquisition we want to do. Basically, it runs the hardware in `realtime` mode, but every `n` scans in realtime mode, it halts the acquisition, changes the frequency, and starts acquiring in realtime at the new frequency. It has configurable overlap for each frequency step. as well as configurable frequency and span.
 
 In the stepped mode, only the latest data row is active with regard to the cursor, though the entire swept range is displayed. The older data is the slightly darker grey colour.
+
+---
+
+The special pseudo-sweeping mode is specifically to allow much greater control and insight into the integration time of the SignalHound. One of the issues with the SignalHound's internal `sweeping` mode is the actual percentage of the time the system is *actually* acquiring data is not well known. In the `realtime` mode, the observation time is 100%, so it's clearly established, but the bandwidth is limited to 20 Mhz.
+
+By stepping the system through frequencies at a low rate (typically > 10 seconds per frequency), we can achieve a observation time efficiency of nearly 100% / number of observation bands, which allows us to rigidly quantify actual signal strength when integrating data over many hours. 
+
+Since the signals we're interested in are astrophysical phenomenon, and we expect to *need* many hours or days of integration time to resolve the signals from both the system and physical noise, being able to define precisely the actual duration each frequency was acquired for is vital.
+
+The SignalHound does take some time to re-tune the frontend when stepping frequencies (~1 second), which is unfortunate, but the loss here can simply be offset by integrating at each frequency for a longer period of time.
+
+Unfortunately, the SignalHound API does not allow re-tuning of the frontend while acquiring in `realtime` mode. Interestingly enough, you *can* call the `configureCenterSpan` function on a running acquisition, and it returns with a "succeeded" call status, but appears to do nothing.
 
 ---
 
