@@ -51,7 +51,7 @@ Currently, there is also a prototype visualization tool as well (`main.py` in th
 
 The visualization tool connects to a running acquisition session, and retreives scans from the currently running acquisition. The advantage of this is that it can connect and disconnect from a running acquisition, all without interrupting the actual data-logging in the acquisition.   
 
-Also, the current interface for the visualization and acquisition scripts is over TCP, so you can connect to a running acquisition on one computer, and view the plots of the data on a different computer (`python main.py {computer running acq's IP}`.
+Also, the current interface for the visualization and acquisition scripts is over TCP, so you can connect to a running acquisition on one computer, and view the plots of the data on a different computer (`python main.py {computer running acq's IP}`).
 
 The visualization tool also generates some simple statistics for the  acquired data, as well as automatically highlighting all the peaks above a certain threshold in the display (adjustable with the slider at the top of the window).
 
