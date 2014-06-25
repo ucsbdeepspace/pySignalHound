@@ -142,14 +142,30 @@ class InternalSweepAcqThread(object):
 				self.sh.forceClose()
 				try:
 					while 1:
-						self.log.warning("Freeing python device handle")
+						self.log.warning("Trying to free python device handle")
 						del(self.sh)
 				except UnboundLocalError:
-					pass
+					self.log.info("Handle freed?")
+				except AttributeError:
+					self.log.info("Handle freed?")
 
-				self.log.error("Hardware self.shut down, completely re-initializing device interface!")
+				self.log.error("Hardware shut down, completely re-initializing device interface!")
 				# sys.exit()
+
+				self.log.info("Preparing to reset device.")
 				self.sh = SignalHound()
+				self.log.info("Performing hardware reset")
+				self.sh.preset()
+
+				self.log.info("Reset triggered. Waiting 5 seconds for device to restart.")
+				time.sleep(5)
+
+
+				self.log.info("Hardware reset. Reopening device.")
+				self.sh = SignalHound()
+
+
+
 				self.startAcquisition(dataQueue, dataQueue)
 
 

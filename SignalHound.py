@@ -117,7 +117,7 @@ class SignalHound(object):
 			self.log.warning("Linux API still in progress!")
 
 			libPath = ctu.find_library("bbapi")
-			print("Lib Path = ", libPath)
+			# print("Lib Path = ", libPath)
 			self.dll = ct.CDLL (libPath)
 
 		self.cRawSweepCallbackFunc = None
@@ -158,8 +158,9 @@ class SignalHound(object):
 
 
 		elif sys.platform == "linux" or sys.platform == "linux2":
-			self.dll.dlclose(self.dll._handle)
-			self.log.warning("Linux dll freeing not tested!")
+			dlfcn = ct.cdll.LoadLibrary('libdl.so')
+			dlfcn.dlclose(self.dll._handle)
+
 
 	def openDevice(self):
 
