@@ -132,11 +132,16 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 				runningSumItems = 0
 				try:
 					# Holy shit, sok.send is MUCH faster then sok.sendall. Wat?
-					# I bet senall() is sending each byte at a time from native python, rather then just calling send() from the OS
+					# I bet sendall() is sending each byte at a time from native python, rather then just calling send() from the OS
 					# API directly on the buffer to send. Stupid.
-					ret = sok.send(pData)
-					if ret != len(pData):
-						raise BufferError
+					msgLen = len(pData)
+					totalsent = 0
+					while totalsent < msgLen:
+						sent = sok.send(pData[totalsent:])
+						if sent == 0:
+							raise RuntimeError("socket connection broken")
+						totalsent = totalsent + sent
+
 					dataChunks += 1
 				except BufferError:
 					log.error("Transmission failed to properly transmit all bytes")
@@ -157,6 +162,7 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 					log.error("Socket Error!")
 					log.error(traceback.format_exc())
 					sok = None
+					log.error("Closing socket connection.")
 
 
 

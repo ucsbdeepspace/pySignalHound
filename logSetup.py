@@ -110,23 +110,29 @@ class RobustFileHandler(logging.FileHandler):
 
 		self.close()
 
+LOGGING_INITIALIZED = False
 
 def initLogging(logLevel=logging.INFO, printQ = None):
 	print "Setting up loggers....",
+	global LOGGING_INITIALIZED
 
-	mainLogger = logging.getLogger("Main")                  # Main logger
-	mainLogger.setLevel(logLevel)
-	ch = ColourHandler(printQ = printQ)
-	mainLogger.addHandler(ch)
+	if not LOGGING_INITIALIZED:
+		mainLogger = logging.getLogger("Main")                  # Main logger
+		mainLogger.setLevel(logLevel)
+		ch = ColourHandler(printQ = printQ)
+		mainLogger.addHandler(ch)
 
-	logName = "Error - %s.txt" % (time.strftime("%Y-%m-%d %H;%M;%S", time.gmtime()))
+		logName = "Error - %s.txt" % (time.strftime("%Y-%m-%d %H;%M;%S", time.gmtime()))
 
-	errLogHandler = RobustFileHandler(os.path.join("./logs", logName))
-	errLogHandler.setLevel(logging.WARNING)
-	formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-	errLogHandler.setFormatter(formatter)
+		if not os.path.isdir("./logs"):
+			os.mkdir("./logs")
 
-	mainLogger.addHandler(errLogHandler)
+		errLogHandler = RobustFileHandler(os.path.join("./logs", logName))
+		errLogHandler.setLevel(logging.WARNING)
+		formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+		errLogHandler.setFormatter(formatter)
 
+		mainLogger.addHandler(errLogHandler)
+		LOGGING_INITIALIZED = True
 
 	print "done"

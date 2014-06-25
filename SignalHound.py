@@ -19,12 +19,15 @@
 
 import ctypes as ct
 import ctypes.util as ctu
-from ctypes import wintypes as wt
 import bb_api_h as hf
 
-import logging
 
-# pyloint: disable=
+import sys
+
+if sys.platform == "win32":
+	from ctypes import wintypes as wt
+
+import logging
 
 import numpy as np
 from numpy.core.multiarray import int_asbuffer
@@ -81,30 +84,41 @@ class SignalHound(object):
 		self.log = logging.getLogger("Main.DeviceInt")
 		self.devOpen = False
 
-		self.log.info("Opening DLL")
-		libPath = ctu.find_library("bb_api.dll")
+		if sys.platform == "win32":
 
-		if not libPath:
-			if os.path.exists("bb_api.dll"):  # This is a messy hack, but it makes imports work with my scripts. I should
-												# Really put the signal hound DLL on my $PATH, but whatever
-				libPath = "bb_api.dll"
-			elif os.path.exists("../bb_api.dll"):
-				libPath = "../bb_api.dll"
-			else:
-				self.log.error("Could not locate signal hound DLL.")
-				raise EnvironmentError("Required DLL not available on system PATH")
+			self.log.info("Opening DLL")
+			libPath = ctu.find_library("bb_api.dll")
+
+			if not libPath:
+				if os.path.exists("bb_api.dll"):  # This is a messy hack, but it makes imports work with my scripts. I should
+													# Really put the signal hound DLL on my $PATH, but whatever
+					libPath = "bb_api.dll"
+				elif os.path.exists("../bb_api.dll"):
+					libPath = "../bb_api.dll"
+				else:
+					self.log.error("Could not locate signal hound DLL.")
+					raise EnvironmentError("Required DLL not available on system PATH")
 
 
-		self.log.info("Found dll located at %s", libPath)
-		self.dll = ct.CDLL (libPath)
+			self.log.info("Found dll located at %s", libPath)
+			self.dll = ct.CDLL (libPath)
 
-		# This is horrible ctypes DLL hackery
-		# You need to access the internal DLL handle to properly force windows to close the dll handle, which
-		# is the only way to COMPLETELY close the device interface.
+			# This is horrible ctypes DLL hackery
+			# You need to access the internal DLL handle to properly force windows to close the dll handle, which
+			# is the only way to COMPLETELY close the device interface.
 
-		# It's needed if you ever want to completely close the device, to re-initialize the device interface.
-		# ctypes doesn't make manually deallocating a dll easy.
-		self.dllHandle = wt.HMODULE(self.dll._handle)
+			# It's needed if you ever want to completely close the device, to re-initialize the device interface.
+			# ctypes doesn't make manually deallocating a dll easy.
+			self.dllHandle = wt.HMODULE(self.dll._handle)
+
+
+
+		elif sys.platform == "linux" or sys.platform == "linux2":
+			self.log.warning("Linux API still in progress!")
+
+			libPath = ctu.find_library("bbapi")
+			print("Lib Path = ", libPath)
+			self.dll = ct.CDLL (libPath)
 
 		self.cRawSweepCallbackFunc = None
 
@@ -133,13 +147,19 @@ class SignalHound(object):
 		# harmless, and I figure it's better to explicitly clean-up the DLL handle then
 		# rely on it happening automatically
 		self.log.info("Forcing DLL handle closed")
-		try:
-			ct.windll.kernel32.FreeLibrary(self.dllHandle)
-		except ct.ArgumentError as e:
-			self.log.warning("Argument error in forcing DLL closed")
-			self.log.warning("%s", e)
-			pass
 
+		if sys.platform == "win32":
+			try:
+				ct.windll.kernel32.FreeLibrary(self.dllHandle)
+			except ct.ArgumentError as e:
+				self.log.warning("Argument error in forcing DLL closed")
+				self.log.warning("%s", e)
+
+
+
+		elif sys.platform == "linux" or sys.platform == "linux2":
+			self.dll.dlclose(self.dll._handle)
+			self.log.warning("Linux dll freeing not tested!")
 
 	def openDevice(self):
 
@@ -166,7 +186,7 @@ class SignalHound(object):
 		try:
 			self.dll.bbAbort(self.deviceHandle)
 			self.log.info("Running acquistion aborted.")
-		except Error as e:
+		except Exception as e:
 			self.log.info("Could not abort acquisition: %s", e)
 
 
