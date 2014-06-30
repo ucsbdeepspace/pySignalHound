@@ -1,7 +1,4 @@
 
-
-
-
 # I'm worried about possible IF frequencies creeping into the data, so I'm adding a 2.5 Mhz shift to
 # prevent the signal of interest (h-flip band) from being exactly centered in the acquired data.
 # I suspect the IF runs at the center frequency, and is sensitive to +-10 Mhz around the center.
@@ -98,7 +95,7 @@ ACQ_MODE               = "average"
 # "lin-full-scale"
 
 # The ACQ_Y_SCALE parameter will change the units of returned sweeps. If "log-scale" is provided
-# sweeps will be returned in amplitude unit dBm. If "lin-scale" is return, the returned units will be in
+# sweeps will be returned in amplitude unit dBm. If "lin-scale" is specified, the returned units will be in
 # millivolts. If the full scale units are specified, no corrections are applied to the data and amplitudes are
 # taken directly from the full scale input.
 ACQ_Y_SCALE            = "log-scale"

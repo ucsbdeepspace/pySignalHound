@@ -12,7 +12,7 @@ BB_SAMPLERATE             = 80000000
 
 # BB60A/C
 BB60_MIN_FREQ             = 9.0e3
-BB60_MAX_FREQ             = 6.5e9
+BB60_MAX_FREQ             = 6.4e9
 BB60_MAX_SPAN             = ( BB60_MAX_FREQ - BB60_MIN_FREQ)
 
 # BB124A
@@ -27,16 +27,23 @@ BB_MAX_SWEEP_TIME         = 0.1         # 100ms
 BB_MIN_RT_RBW             = 2465.0
 BB_MAX_RT_RBW             = 631250.0
 BB_MIN_RT_SPAN            = 200.0e3
-BB_MAX_RT_SPAN            = 20.0e6
+BB60A_MAX_RT_SPAN         = 20.0e6
+BB60C_MAX_RT_SPAN         = 27.0e6
 BB_MIN_TG_SPAN            = 200.0e3
 BB_MAX_TG_SPAN            = 20.0e6
 BB_MIN_SWEEP_TIME         = 0.00001     # 10us in zero-span
 BB_RAW_PACKET_SIZE        = 299008
 BB_MIN_USB_VOLTAGE        = 4.4
+BB_MIN_IQ_BW              = 50.0e3 # 50 kHz min bandwidth
 
 BB_AUTO_ATTEN             = -1.0
 BB_MAX_REFERENCE          = 20.0        # dBM
 BB_MAX_ATTENUATION        = 30.0        # dB
+
+
+BB_MIN_DECIMATION         = 0  # 2^0 = 1
+BB_MAX_DECIMATION         = 128  # 2^7 = 128
+
 
 # Gain can be between -1 and MAX
 BB_AUTO_GAIN              = -1
@@ -49,7 +56,8 @@ BB_SWEEPING               = 0x0
 BB_REAL_TIME              = 0x1
 BB_ZERO_SPAN              = 0x2
 BB_TIME_GATE              = 0x3
-BB_RAW_PIPE               = 0x4
+BB_STREAMING              = 0x4
+BB_RAW_PIPE               = BB_STREAMING  # use BB_STREAMING
 BB_RAW_SWEEP              = 0x5
 BB_RAW_SWEEP_LOOP         = 0x6
 BB_AUDIO_DEMOD            = 0x7
@@ -69,14 +77,12 @@ BB_6DB_RBW                = 0x2 # n/a
 
 BB_MIN_AND_MAX            = 0x0
 BB_AVERAGE                = 0x1
-BB_MIN_ONLY               = 0x2
-BB_MAX_ONLY               = 0x3
 BB_QUASI_PEAK             = 0x4 # n/a
 
 BB_LOG                    = 0x0
 BB_VOLTAGE                = 0x1
 BB_POWER                  = 0x2
-BB_BYPASS                 = 0x3
+BB_SAMPLE                 = 0x3
 
 BB_NUTALL                 = 0x0
 BB_BLACKMAN               = 0x1
@@ -91,7 +97,10 @@ BB_DEMOD_USB              = 0x2
 BB_DEMOD_LSB              = 0x3
 BB_DEMOD_CW               = 0x4
 
-BB_DEFAULT                = 0x0
+# Streaming flags
+BB_STREAM_IQ              = 0x0
+BB_STREAM_IF              = 0x1
+BB_DIRECT_RF              = 0x2   # BB60C only
 BB_TIME_STAMP             = 0x10
 
 BB_NO_TRIGGER             = 0x0
@@ -102,8 +111,6 @@ BB_TRIGGER_RISING         = 0x0
 BB_TRIGGER_FALLING        = 0x1
 
 BB_TWENTY_MHZ             = 0x0
-BB_TEN_MHZ                = 0x1
-BB_SEVEN_MHZ              = 0x2
 
 BB_ENABLE                 = 0x0
 BB_DISABLE                = 0x1
@@ -112,6 +119,7 @@ BB_PORT1_AC_COUPLED       = 0x00
 BB_PORT1_DC_COUPLED       = 0x04
 BB_PORT1_INT_REF_OUT      = 0x00
 BB_PORT1_EXT_REF_IN       = 0x08
+BB_PORT1_OUT_AC_LOAD      = 0x10
 BB_PORT1_OUT_LOGIC_LOW    = 0x14
 BB_PORT1_OUT_LOGIC_HIGH   = 0x1C
 
@@ -143,6 +151,7 @@ bbInvalidScaleErr            = -101
 bbInvalidDetectorErr         = -100
 
 # General Errors
+bbUSBTimeoutErr              = -15
 bbDeviceConnectionErr        = -14
 bbPacketFramingErr           = -13
 bbGPSErr                     = -12
@@ -165,7 +174,9 @@ bbNoError                    = 0
 bbAdjustedParameter          = 1
 bbADCOverflow                = 2
 bbNoTriggerFound             = 3
-
+bbClampedToUpperLimit        = 4
+bbClampedToLowerLimit        = 5
+bbUncalibratedDevice         = 6
 
 '''
 

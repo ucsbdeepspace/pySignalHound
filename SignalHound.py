@@ -76,7 +76,7 @@ class SignalHound(object):
 		"bbNoTriggerFound"             : 3
 	}
 
-	rawSweepArrSize = 299008
+	rawDataArrSize = 299008
 	rawSweepTriggerArraySize = 68
 
 	def __init__(self):
@@ -114,11 +114,9 @@ class SignalHound(object):
 
 
 		elif sys.platform == "linux" or sys.platform == "linux2":
-			self.log.warning("Linux API still in progress!")
+			self.log.error("Linux Not supported for API Verson 2.x!")
+			raise NotImplementedError("Linux Not supported for API Verson 2.x!")
 
-			libPath = ctu.find_library("bbapi")
-			# print("Lib Path = ", libPath)
-			self.dll = ct.CDLL (libPath)
 
 		self.cRawSweepCallbackFunc = None
 
@@ -156,10 +154,6 @@ class SignalHound(object):
 				self.log.warning("%s", e)
 
 
-
-		elif sys.platform == "linux" or sys.platform == "linux2":
-			dlfcn = ct.cdll.LoadLibrary('libdl.so')
-			dlfcn.dlclose(self.dll._handle)
 
 
 	def openDevice(self):
@@ -200,14 +194,18 @@ class SignalHound(object):
 
 
 	def queryDeviceDiagnostics(self):
-		# BB_API bbStatus bbQueryDiagnostics(int device, float *temperature, float *voltage1_8, float *voltage1_2, float *voltageUSB, float *currentUSB);
+		raise DeprecationWarning("This function is no longer supported in the 2.0 SignalHound API")
+
+
+	def getDeviceDiagnostics(self):
+
+
+		# BB_API bbStatus bbGetDeviceDiagnostics(int device, float *temperature, float *voltage1_8, float *voltage1_2, float *voltageUSB, float *currentUSB);
 
 		# temperature  Pointer to 32bit float. If the function is successful temperature will point
 		# 		to the current internal device temperature, in degrees Celsius. See
 		# 		"bbSelfCal" for an explanation on why you need to monitor the device
 		# 		temperature.
-		# voltage1_8  Factory use only: Internal regulator.
-		# voltage1_2 Factory use only: Internal regulator.
 		# voltageUSB  USB operating voltage, in volts. Acceptable ranges are 4.40 to 5.25 V.
 		# currentUSB  USB current draw, in mA. Acceptable ranges are 800 - 1000 mA
 
@@ -221,20 +219,16 @@ class SignalHound(object):
 
 		# self.log.info("Querying device diagnostics.")
 		temperature = ct.c_float(0)
-		voltage1_8 = ct.c_float(0)
-		voltage1_2 = ct.c_float(0)
 		voltageUSB = ct.c_float(0)
 		currentUSB = ct.c_float(0)
 
 		temperaturePnt = ct.pointer(temperature)
-		voltage1_8Pnt = ct.pointer(voltage1_8)
-		voltage1_2Pnt = ct.pointer(voltage1_2)
 		voltageUSBPnt = ct.pointer(voltageUSB)
 		currentUSBPnt = ct.pointer(currentUSB)
 
 
 
-		err = self.dll.bbQueryDiagnostics(self.deviceHandle, temperaturePnt, voltage1_8Pnt, voltage1_2Pnt, voltageUSBPnt, currentUSBPnt)
+		err = self.dll.bbGetDeviceDiagnostics(self.deviceHandle, temperaturePnt, voltageUSBPnt, currentUSBPnt)
 
 		if err == self.bbStatus["bbNoError"]:
 			pass
@@ -247,8 +241,6 @@ class SignalHound(object):
 
 		ret = {
 			"temperature" :  temperature.value,
-			"voltage1_8"  :  voltage1_8.value,
-			"voltage1_2"  :  voltage1_2.value,
 			"voltageUSB"  :  voltageUSB.value,
 			"currentUSB"  :  currentUSB.value
 		}
@@ -261,6 +253,39 @@ class SignalHound(object):
 
 		# self.log.info("Diagnostics queried. Values = \n%s", "\n".join(["	{key}, {value}".format(key=key, value=value) for key, value in ret.iteritems()]))
 		return ret
+
+	def queryStreamInfo(self):
+
+
+		return_len         = ct.c_int(0)
+		bandwidth          = ct.c_double(0)
+		samples_per_sec    = ct.c_int(0)
+
+		return_lenPnt      = ct.pointer(return_len)
+		bandwidthPnt       = ct.pointer(bandwidth)
+		samples_per_secPnt = ct.pointer(samples_per_sec)
+
+		err = self.dll.bbQueryStreamInfo(self.deviceHandle, return_lenPnt, bandwidthPnt, samples_per_secPnt)
+
+		if err == self.bbStatus["bbNoError"]:
+			pass
+		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
+			raise IOError("Device not open!")
+		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
+			raise IOError("The device specified is not currently streaming!")
+		else:
+			raise IOError("Unknown error!")
+
+		# The raw data array returned by fetchRaw when in streaming mode is the value of return_len * 2 (since each value is two floats)
+		self.rawDataArrSize = return_len.value * 2
+
+		values = {
+			"return_len"      : return_len.value,
+			"samples_per_sec" : bandwidth.value,
+			"bandwidth"       : samples_per_sec.value
+		}
+
+		return values
 
 	def configureAcquisition(self, detector, scale):
 		# BB_API bbStatus bbConfigureAcquisition(int device, unsigned int detector, unsigned int scale);
@@ -599,6 +624,56 @@ class SignalHound(object):
 			raise IOError("'rejection' value is not one of the accepted values.")
 		else:
 			raise IOError("Unknown error setting configureSweepCoupling! Error = %s" % err)
+
+
+
+	def configureIQ(self, downsample, bandwidth):
+		# BB_API bbStatus bbConfigureIQ(int device, int downsampleFactor, double bandwidth);
+
+		#downsampleFactor  Specify a decimation rate for the 40MS/s IQ digital stream.
+		#bandwidth         Specify a bandpass filter width on the IQ digital stream.
+
+		# Downsample factor settings:
+		# Decimation-Rate  Sample Rate (IQ pairs/s)  Maximum Bandwidth
+		# 1                40 MS/s                   27 MHz
+		# 2                20 MS/s                   17.8 MHz
+		# 4                10 MS/s                   8.0 MHz
+		# 8                5 MS/s                    3.75 MHz
+		# 16               2.5 MS/s                  2.0 MHz
+		# 32               1.25 MS/s                 1.0 MHz
+		# 64               0.625 MS/s                0.5 MHz
+		# 128              0.3125 MS/s               0.125 MHz
+
+		# This function is used to configure the digital IQ data stream. A decimation factor and filter bandwidth
+		# are able to be specified. The decimation rate divides the IQ sample rate directly while the bandwidth
+		# parameter further filters the digital stream.
+		# For each given decimation rate, a maximum bandwidth value must be supplied to account for sufficient
+		# filter rolloff. That table is above. See  bbFetchRaw() for polling the IQ data stream
+
+		validDecimationFactors = [1<<i for i in range(8)]
+		# Resolves to [1, 2, 4, 8, 16, 32, 64, 128]
+		if downsample not in validDecimationFactors:
+			raise ValueError("Decimation ratio must be one of values: %s. Specified value: %s" % (validDecimationFactors, downsample))
+
+
+		bandwidth  = ct.c_double(bandwidth)
+		downsample = ct.c_int(downsample)
+
+		err = self.dll.bbConfigureIQ(self.deviceHandle, downsample, bandwidth)
+
+		if err == self.bbStatus["bbNoError"]:
+			self.log.info("configureSweepCoupling Succeeded.")
+		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
+			raise IOError("Device not open!")
+		elif err == self.bbStatus["bbInvalidParameterErr"]:
+			raise IOError("The downsample rate is outside the acceptable input range or the downsample rate is not a power of two.")
+		elif err == self.bbStatus["bbClampedToLowerLimit"]:
+			raise IOError("The bandpass filter width specified is lower than  BB_MIN_IQ_BW")
+		elif err == self.bbStatus["bbClampedToUpperLimit"]:
+			raise IOError("Warning that the bandpass filter width was clamped to the maximum value allowed by the downsampleFaction.")
+		else:
+			raise IOError("Unknown error setting bbConfigureIQ! Error = %s" % err)
+
 
 
 
@@ -1048,6 +1123,7 @@ class SignalHound(object):
 
 		modeOpts = {
 			"sweeping"       : hf.BB_SWEEPING,
+			"streaming"      : hf.BB_STREAMING,
 			"real-time"      : hf.BB_REAL_TIME,
 			"zero-span"      : hf.BB_ZERO_SPAN,
 			"time-gate"      : hf.BB_TIME_GATE,
@@ -1073,13 +1149,17 @@ class SignalHound(object):
 			raise ValueError("Mode must be one of %s. Passed value was %s." % (modeOpts, mode))
 
 
+		if mode == hf.BB_ZERO_SPAN or mode == hf.BB_TIME_GATE:
+			raise NotImplementedError("Zero span and time-gate modes are not functional yet in the BB 2.0 API Version. Please contact signalhound for more information.")
+
 		if mode == hf.BB_ZERO_SPAN:
 			if flag in zeroSpanOpts:
 				flag = zeroSpanOpts[flag]
 			else:
 				raise ValueError("Available flag settings for mode \"zero-span\" are \"demod-am\" and \"demod-fm\". Passed value was %s." % flag)
 
-		elif mode == hf.BB_RAW_PIPE:
+		# Checking for raw-pipe mode is messy, since it uses the same configuration value as the streaming mode.
+		elif mode == hf.BB_RAW_PIPE and self.acq_conf["acq_mode"] == "raw-pipe":
 			if flag in rawPipeOpts:
 				flag = rawPipeOpts[flag]
 			else:
@@ -1369,16 +1449,17 @@ class SignalHound(object):
 		# You can get the size of the buffer by calling getRawSweep_size(), getRawSweep_s_size() and getRawSweepTrig_size()
 
 		if not ctDataBufPtr:
-			rawBuf = (ct.c_float * self.rawSweepArrSize)()
+			rawBuf = (ct.c_float * self.rawDataArrSize)()
 			rawBufPtr = ct.pointer(rawBuf)
 		else:
 			rawBufPtr = ctDataBufPtr
 
 		if not ctTrigBufPtr:
-			triggers = (ct.c_int * self.rawSweepTriggerArraySize)(0)
+			triggers = (ct.c_int * self.rawSweepTriggerArraySize)()
 			triggersPtr = ct.pointer(triggers)
 		else:
 			triggersPtr = ctTrigBufPtr
+
 
 
 		err = self.dll.bbFetchRaw(self.deviceHandle, rawBufPtr, triggersPtr)
@@ -1411,7 +1492,7 @@ class SignalHound(object):
 		ret = {}
 
 		if not ctDataBufPtr:
-			ret["data"] = SignalHound.fastDecodeArray(rawBuf, self.rawSweepArrSize, np.float32)
+			ret["data"] = SignalHound.fastDecodeArray(rawBuf, self.rawDataArrSize, np.float32)
 
 		if not ctTrigBufPtr:
 			ret["triggers"] = SignalHound.fastDecodeArray(triggers, self.rawSweepTriggerArraySize, np.int32)
@@ -1426,7 +1507,7 @@ class SignalHound(object):
 
 
 		if not ctDataBufPtr:
-			rawBuf = (ct.c_short * self.rawSweepArrSize)()
+			rawBuf = (ct.c_short * self.rawDataArrSize)()
 			rawBufPtr = ct.pointer(rawBuf)
 		else:
 			rawBufPtr = ctDataBufPtr
@@ -1471,7 +1552,7 @@ class SignalHound(object):
 		ret = {}
 
 		if not ctDataBufPtr:
-			ret["data"] = SignalHound.fastDecodeArray(rawBuf, self.rawSweepArrSize, np.short)
+			ret["data"] = SignalHound.fastDecodeArray(rawBuf, self.rawDataArrSize, np.short)
 
 		if not ctTrigBufPtr:
 			ret["triggers"] = SignalHound.fastDecodeArray(triggers, self.rawSweepTriggerArraySize, np.int32)
@@ -1481,11 +1562,11 @@ class SignalHound(object):
 
 	@classmethod
 	def getRawSweep_size(cls):
-		return ct.c_float, cls.rawSweepArrSize
+		return ct.c_float, cls.rawDataArrSize
 
 	@classmethod
 	def getRawSweep_s_size(cls):
-		return ct.c_short, cls.rawSweepArrSize
+		return ct.c_short, cls.rawDataArrSize
 
 	@classmethod
 	def getRawSweepTrig_size(cls):
