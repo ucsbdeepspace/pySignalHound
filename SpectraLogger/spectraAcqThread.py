@@ -65,7 +65,7 @@ def sweepSource(dataQueues, ctrlNs, printQueue):
 	numPoints = sh.queryTraceInfo()["arr-size"]
 	dataQueue.put({"arrSize" : numPoints})
 
-	temperature = sh.queryDeviceDiagnostics()["temperature"]
+	temperature = sh.getDeviceDiagnostics()["temperature"]
 
 	while 1:
 		try:
@@ -111,7 +111,7 @@ def sweepSource(dataQueues, ctrlNs, printQueue):
 			loop_timer = now
 
 		if loops % CAL_CHK_LOOP_CNT == 0:
-			diags = sh.queryDeviceDiagnostics()
+			diags = sh.getDeviceDiagnostics()
 			dataQueue.put({"status" : diags})
 
 			temptmp = diags["temperature"]

@@ -110,7 +110,7 @@ class InternalSweepAcqThread(object):
 		numPoints = self.sh.queryTraceInfo()["arr-size"]
 		dataQueue.put({"arrSize" : numPoints})
 
-		temperature = self.sh.queryDeviceDiagnostics()["temperature"]
+		temperature = self.sh.getDeviceDiagnostics()["temperature"]
 
 		while 1:
 			try:
@@ -186,7 +186,7 @@ class InternalSweepAcqThread(object):
 				loop_timer = now
 
 			if loops % CAL_CHK_LOOP_CNT == 0:
-				diags = self.sh.queryDeviceDiagnostics()
+				diags = self.sh.getDeviceDiagnostics()
 				dataQueue.put({"status" : diags})
 
 				temptmp = diags["temperature"]

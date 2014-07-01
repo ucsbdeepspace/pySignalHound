@@ -85,7 +85,7 @@ def sweepSource(statusMessageQueue, ctrlNs, printQueue, ringBuf):
 	startAcquisition(sh, statusMessageQueue)
 
 
-	temperature = sh.queryDeviceDiagnostics()["temperature"]
+	temperature = sh.getDeviceDiagnostics()["temperature"]
 
 	while ctrlNs.run:
 		bufPtr, lock = ringBuf.getAddPointer()
@@ -124,7 +124,7 @@ def sweepSource(statusMessageQueue, ctrlNs, printQueue, ringBuf):
 			# print
 
 		if seq_num % CAL_CHK_LOOP_CNT == 0:
-			diags = sh.queryDeviceDiagnostics()
+			diags = sh.getDeviceDiagnostics()
 			statusMessageQueue.put({"status" : (time.time(), diags)})
 
 			temptmp = diags["temperature"]

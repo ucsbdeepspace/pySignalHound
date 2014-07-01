@@ -2045,7 +2045,7 @@ class SignalHound(object):
 		except IOError:
 			tmp = {}
 
-		tmp.update(self.queryDeviceDiagnostics())
+		tmp.update(self.getDeviceDiagnostics())
 		tmp.update(self.acq_conf)
 
 		return tmp
