@@ -22,10 +22,12 @@ import logging
 import time
 import traceback
 
+import numpy as np
+
 # Pull in the settings crap
 from settings import ACQ_FREQ, ACQ_SPAN, ACQ_REF_LEVEL_DB, ACQ_ATTENUATION_DB, ACQ_GAIN_SETTING, ACQ_RBW, ACQ_VBW, ACQ_OVERLAP, ACQ_BIN_SAMPLES
 from settings import ACQ_SWEEP_TIME_SECONDS, ACQ_WINDOW_TYPE, ACQ_UNITS, ACQ_TYPE, ACQ_MODE, ACQ_Y_SCALE, PRINT_LOOP_CNT, CAL_CHK_LOOP_CNT
-
+from settings import NUM_AVERAGE
 
 def sweepSource(dataQueues, ctrlNs, printQueue):
 	acqRunner = InternalSweepAcqThread(printQueue)
@@ -112,6 +114,12 @@ class InternalSweepAcqThread(object):
 
 		temperature = self.sh.getDeviceDiagnostics()["temperature"]
 
+
+		runningSum = np.array(())
+		runningSumItems = 0
+		startFreq = 0
+
+
 		while 1:
 			try:
 
@@ -123,11 +131,69 @@ class InternalSweepAcqThread(object):
 								"data": trace
 							}
 
+				acqInfo = dataDict["info"]
+				if runningSum.shape != dataDict["data"]["max"].shape:
+					runningSum = np.zeros_like(dataDict["data"]["max"])
+					runningSumItems = 0
+					startFreq = acqInfo["ret-start-freq"]
+					binSize = acqInfo["arr-bin-size"]
+					self.log.info("Running average array size changed! Either the system just started, or something is seriously wrong!")
 
-				dataQueue.put(dataDict)
-				plotQueue.put(dataDict)
+				changed = False
+				if startFreq != acqInfo["ret-start-freq"]:
+					changed = True
 
-				del(trace)
+				else:
+					runningSum += dataDict["data"]["max"]
+					runningSumItems += 1
+
+
+
+				# if we've reached the number of average items per output array, or the frequency has changed, requiring an early dump of the specra data.
+				if runningSumItems == NUM_AVERAGE or changed:
+					self.log.info("Running sum shape = %s, items = %s", runningSum.shape, runningSumItems)
+					# Divide down to the average
+					arr = runningSum / runningSumItems
+
+					# Build array to write out.
+					saveTime = time.time()
+					# self.log.info("Saving data record with timestamp %f", saveTime)
+
+					# Only write out to the file if we actually have data
+					if runningSumItems != 0:
+
+
+						dataQueue.put({"row" : (saveTime, startFreq, binSize, runningSumItems, arr)})
+						if plotQueue:
+							plotQueue.put({"row" : (saveTime, startFreq, binSize, runningSumItems, arr)})
+
+
+
+
+
+						runningSum = np.zeros_like(runningSum)
+						self.log.info("Estimated items in processing queue %s", dataQueue.qsize())
+						self.log.info("Running sum shape = %s, items = %s", runningSum.shape, runningSumItems)
+						runningSumItems = 0
+
+					# now = time.time()
+					# delta = now-loop_timer
+					# freq = 1 / (delta)
+					# self.log.info("Elapsed Time = %0.5f, Frequency = %s", delta, freq)
+					# loop_timer = now
+
+
+					# If we wrote the output because the current spectra has changed, we need to update the running acq info variables with the new frequencies.
+					if changed:
+						self.log.info("Retuned! Old freq = %s, new freq = %s", startFreq, acqInfo["ret-start-freq"])
+
+						runningSum += dataDict["data"]["max"]
+						startFreq = acqInfo["ret-start-freq"]
+						binSize = acqInfo["arr-bin-size"]
+						runningSumItems = 1
+
+
+					del(trace)
 
 
 

@@ -112,78 +112,29 @@ def logIter(dataQueue, ctrlNs, printQueue, arrWidth, test=False):
 			# print "data" in tmp
 			# print "info" in tmp
 			# print "data" in tmp and "max" in tmp["data"]
+			if "row" in tmp:
+				saveTime, startFreq, binSize, runningSumItems, arr = tmp["row"]
+				# append it to the HDF5 file
+				curSize = dset.shape[0]
+				# print("Current shape = ", dset.shape)
+				dset.resize(curSize+1, axis=0)
+
+				flatten = lambda *args: args
+				dset[curSize] = flatten(saveTime, startFreq, binSize, runningSumItems, *arr)
+
+				out.flush()  # FLush early, flush often
+				# Probably a bad idea without a SSD
 
 
-			if "data" in tmp and "info" in tmp and "max" in tmp["data"]:
-				acqInfo = tmp["info"]
+				runningSum = np.zeros_like(runningSum)
+				log.info("Writing row to file!")
+				log.info("Estimated items in processing queue %s", dataQueue.qsize())
 
-				# Array has changed shape, probably because this is the first acquisition? Anyways, set up the running-sum array, and the various required values
-				if runningSum.shape != tmp["data"]["max"].shape:
-					runningSum = np.zeros_like(tmp["data"]["max"])
-					runningSumItems = 0
-					startFreq = acqInfo["ret-start-freq"]
-					binSize = acqInfo["arr-bin-size"]
-					log.info("Running average array size changed! Either the system just started, or something is seriously wrong!")
+				runningSumItems = 0
 
-				changed = False
-
-				# if the spectra freqency has changed, set the changed flag. Otherwise, add the data to the running sum array as normal.
-				if startFreq != acqInfo["ret-start-freq"]:
-					changed = True
-
-				else:
-					runningSum += tmp["data"]["max"]
-					runningSumItems += 1
-
-				# if we've reached the number of average items per output array, or the frequency has changed, requiring an early dump of the specra data.
-				if runningSumItems == NUM_AVERAGE or changed:
-
-					# Divide down to the average
-					arr = runningSum / runningSumItems
-
-					# Build array to write out.
-					saveTime = time.time()
-					# log.info("Saving data record with timestamp %f", saveTime)
-
-					# Only write out to the file if we actually have data
-					if runningSumItems != 0:
-
-						# append it to the HDF5 file
-						curSize = dset.shape[0]
-						# print("Current shape = ", dset.shape)
-						dset.resize(curSize+1, axis=0)
-
-						flatten = lambda *args: args
-						dset[curSize] = flatten(saveTime, startFreq, binSize, runningSumItems, *arr)
-
-						out.flush()  # FLush early, flush often
-						# Probably a bad idea without a SSD
-
-
-						runningSum = np.zeros_like(runningSum)
-						log.info("Running sum shape = %s, items = %s", runningSum.shape, runningSumItems)
-						runningSumItems = 0
-
-					# now = time.time()
-					# delta = now-loop_timer
-					# freq = 1 / (delta)
-					# log.info("Elapsed Time = %0.5f, Frequency = %s", delta, freq)
-					# loop_timer = now
-
-
-					# If we wrote the output because the current spectra has changed, we need to update the running acq info variables with the new frequencies.
-					if changed:
-						log.info("Retuned! Old freq = %s, new freq = %s", startFreq, acqInfo["ret-start-freq"])
-
-						runningSum += tmp["data"]["max"]
-						startFreq = acqInfo["ret-start-freq"]
-						binSize = acqInfo["arr-bin-size"]
-						runningSumItems = 1
-
-
-					if time.time() - loop_timer > FILE_ROTATION_INTERVAL:
-						log.info("Rotating log files")
-						break
+				if time.time() - loop_timer > FILE_ROTATION_INTERVAL:
+					log.info("Rotating log files")
+					break
 
 
 			elif "settings" in tmp or "status" in tmp:
