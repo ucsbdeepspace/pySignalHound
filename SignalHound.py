@@ -1170,10 +1170,13 @@ class SignalHound(object):
 		else:
 			flag = 0
 
+		self.log.warning("Add checks for frequency limit across BB60a/BB60c")
+
+
 		if mode == hf.BB_REAL_TIME:
 			if not "span_freq" in self.acq_conf:
 				raise ValueError("You must call configureCenterSpan() before initiate()!")
-			elif (self.acq_conf["span_freq"] > hf.BB_MAX_RT_SPAN or
+			elif (self.acq_conf["span_freq"] > hf.BB60A_MAX_RT_SPAN or
 				self.acq_conf["span_freq"] < hf.BB_MIN_RT_SPAN ):
 				raise ValueError("Real-time mode maximum span frequency is 20 Mhz. Specified span frequency = %f" % self.acq_conf["span_freq"])
 
