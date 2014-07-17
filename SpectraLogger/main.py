@@ -65,7 +65,14 @@ def go():
 		print("Importing real-time module!")
 		acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="AcqThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
 
+
+
+
 	acqProc.start()
+
+
+	gpsProc = mp.Process(target=spectraLogThread.logSweeps, name="GpsThread", args=(dataQueue, ctrlNs, printQueue))
+	gpsProc.start()
 
 	logProc = mp.Process(target=spectraLogThread.logSweeps, name="LogThread", args=(dataQueue, ctrlNs, printQueue))
 	logProc.start()
@@ -109,6 +116,11 @@ def go():
 	log.info("Joining on AcqProc")
 	while acqProc.is_alive():
 		acqProc.join(0.1)
+
+	log.info("Joining on GpsProc")
+	while gpsProc.is_alive():
+		gpsProc.join(0.1)
+
 		# print("acqProc.is_alive()", acqProc.is_alive(), "logProc.is_alive()", logProc.is_alive(), "plotProc.is_alive()", plotProc.is_alive())
 	log.info("Joining on LogProc")
 	while logProc.is_alive():

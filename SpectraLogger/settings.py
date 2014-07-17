@@ -118,3 +118,8 @@ NUM_PLOT_AVERAGE       = 30
 # File rotation interval in seconds:
 FILE_ROTATION_INTERVAL = 60 * 60 # 1 hour
 
+# If you set GPS_COM_PORT to None, GPS logging is disabled
+# If GPS_COM_PORT is not none, the system will try to open the port GPS_COM_PORT, and
+# expect to receive a NMEA gps data stream.
+GPS_COM_PORT = 'COM3'
+
