@@ -25,6 +25,8 @@ import time
 import serial
 import pynmea2
 
+import traceback
+
 from settings import GPS_COM_PORT
 
 def startGpsLog(dataQueues, ctrlNs, printQueue):
@@ -48,13 +50,56 @@ class GpsLogThread(object):
 		parse = pynmea2.NMEAStreamReader()
 
 
+		message = {'latitude' : None, 'longitude' : None, 'numsatview' : None, 'date': None, 'time' : None}
 
 		while 1:
 			time.sleep(0.1)
 			dat = ser.read(16)
-			parsed = parse.next(dat)
+			parsed = []
+			try:
+				parsed = parse.next(dat)
+			except UnicodeDecodeError:
+				print("Parse error!")
+				print(traceback.format_exc())
+				for key in message.keys():
+					message[key] = None
+			except pynmea2.nmea.ParseError:
+				print("Parse error!")
+				print(traceback.format_exc())
+				for key in message.keys():
+					message[key] = None
+			except pynmea2.nmea.ChecksumError:
+				print("Parse error!")
+				print(traceback.format_exc())
+				for key in message.keys():
+					message[key] = None
+			except ValueError:
+				print("Parse error!")
+				print(traceback.format_exc())
+				for key in message.keys():
+					message[key] = None
+
 			for msg in parsed:
-				print("Message", msg)
+				if hasattr(msg, "latitude"):
+					message['latitude'] = msg.latitude
+					print("latitude", msg.latitude)
+				if hasattr(msg, "longitude"):
+					message['longitude'] = msg.longitude
+					print("longitude", msg.longitude)
+				if hasattr(msg, "num_sv_in_view"):
+					message['numsatview'] = msg.num_sv_in_view
+					print("sattelites", msg.num_sv_in_view)
+				if hasattr(msg, "timestamp"):
+					message['time'] = msg.timestamp
+					print("timestamp", msg.timestamp)
+				if hasattr(msg, "datestamp"):
+					message['date'] = msg.datestamp
+					print("datestamp", msg.datestamp)
+
+				if all(message.values()):
+					print("Complete message!", message)
+					for key in message.keys():
+						message[key] = None
 
 			# if ctrlNs.run == False:
 			# 	self.log.info("Stopping Acq-thread!")
