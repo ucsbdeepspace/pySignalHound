@@ -121,5 +121,6 @@ FILE_ROTATION_INTERVAL = 60 * 60 # 1 hour
 # If you set GPS_COM_PORT to None, GPS logging is disabled
 # If GPS_COM_PORT is not none, the system will try to open the port GPS_COM_PORT, and
 # expect to receive a NMEA gps data stream.
-GPS_COM_PORT = 'COM3'
+# GPS_COM_PORT = 'COM3'
+GPS_COM_PORT = '/dev/tty.PL2303-00001014'
 
