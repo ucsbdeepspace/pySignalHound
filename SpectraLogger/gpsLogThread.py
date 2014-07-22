@@ -31,6 +31,7 @@ import traceback
 from settings import GPS_COM_PORT
 
 def startGpsLog(dataQueues, ctrlNs, printQueue):
+	print("Creating GPS thread")
 	gpsRunner = GpsLogThread(printQueue)
 	gpsRunner.sweepSource(dataQueues, ctrlNs)
 
@@ -55,8 +56,8 @@ class GpsLogThread(object):
 
 
 	def sweepSource(self, dataQueues, ctrlNs):
-
-		dataQueue, plotQueue = dataQueues
+		print("GPS Log Thread starting")
+		self.dataQueue, self.plotQueue = dataQueues
 
 
 		ser   = serial.Serial(GPS_COM_PORT, 9600, timeout=1)
@@ -81,16 +82,20 @@ class GpsLogThread(object):
 
 
 
-		self.log.info("Acq-thread closing dataQueue!")
-		dataQueue.close()
-		dataQueue.join_thread()
+			if ctrlNs.run == False:
+				self.log.info("Stopping GPS-thread!")
+				break
 
-		plotQueue.close()
-		plotQueue.cancel_join_thread()
 
-		ctrlNs.acqRunning = False
+		self.log.info("GPS-thread closing dataQueue!")
+		self.dataQueue.close()
+		self.dataQueue.join_thread()
 
-		self.log.info("Acq-thread exiting!")
+		self.plotQueue.close()
+		self.plotQueue.cancel_join_thread()
+
+
+		self.log.info("GPS-thread exiting!")
 		self.printQueue.close()
 		self.printQueue.join_thread()
 
@@ -140,15 +145,10 @@ class GpsLogThread(object):
 			self.message['datetime'] = datetime.datetime.combine(self.date, self.time)
 		# We have everything we want
 		if all(self.message.values()) and self.date and self.time:
-
-			self.log.info("Complete self.message = %s!", self.message)
+			self.log.info("Complete self.message = %s. emitting to logger!", self.message)
+			self.dataQueue.put({"gps-info" : self.message})
 			self.clearData()
 
-
-
-		# if ctrlNs.run == False:
-		# 	self.log.info("Stopping Acq-thread!")
-		# 	break
 
 	def clearData(self):
 		self.date = None

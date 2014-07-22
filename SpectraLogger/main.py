@@ -32,6 +32,7 @@ import logging
 import spectraAcqThread
 import internalSweepSpectraAcqThread
 import spectraLogThread
+import gpsLogThread
 import spectraPlotApiThread
 import printThread
 
@@ -58,27 +59,28 @@ def go():
 	ctrlNs.stopped = False
 
 
-	if settings.ACQ_TYPE == "real-time-sweeping":
-		print("Importing real-time-sweeping module!")
-		acqProc = mp.Process(target=internalSweepSpectraAcqThread.sweepSource, name="AcqThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
-	else:
-		print("Importing real-time module!")
-		acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="AcqThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
+	gpsTest = True
+
+	if not gpsTest:
+		if settings.ACQ_TYPE == "real-time-sweeping":
+			print("Importing real-time-sweeping module!")
+			acqProc = mp.Process(target=internalSweepSpectraAcqThread.sweepSource, name="AcqThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
+		else:
+			print("Importing real-time module!")
+			acqProc = mp.Process(target=spectraAcqThread.sweepSource, name="AcqThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
+
+		acqProc.start()
 
 
-
-
-	acqProc.start()
-
-
-	gpsProc = mp.Process(target=spectraLogThread.logSweeps, name="GpsThread", args=(dataQueue, ctrlNs, printQueue))
+	gpsProc = mp.Process(target=gpsLogThread.startGpsLog, name="GpsThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
 	gpsProc.start()
 
-	logProc = mp.Process(target=spectraLogThread.logSweeps, name="LogThread", args=(dataQueue, ctrlNs, printQueue))
+	logProc = mp.Process(target=spectraLogThread.logSweeps, name="LogThread", args=(dataQueue, ctrlNs, printQueue, gpsTest))
 	logProc.start()
 
-	plotProc = mp.Process(target=spectraPlotApiThread.startApiServer, name="PlotApiThread", args=(plotQueue, ctrlNs, printQueue))
-	plotProc.start()
+	if not gpsTest:
+		plotProc = mp.Process(target=spectraPlotApiThread.startApiServer, name="PlotApiThread", args=(plotQueue, ctrlNs, printQueue))
+		plotProc.start()
 
 
 	# A separate process for printing, which allows nice easy non-blocking printing.
@@ -113,28 +115,43 @@ def go():
 	# as soon as the queue is *actually* empty, we exit immediately
 	# - - -
 	# this was a fucking nightmare to track down.
-	log.info("Joining on AcqProc")
-	while acqProc.is_alive():
-		acqProc.join(0.1)
+
+
+	if not gpsTest:
+		log.info("Joining on AcqProc")
+		while acqProc.is_alive():
+			acqProc.join(0.1)
 
 	log.info("Joining on GpsProc")
 	while gpsProc.is_alive():
 		gpsProc.join(0.1)
+
+	if gpsTest:
+		print("Faking halt signals")
+		ctrlNs.acqRunning = False
+
 
 		# print("acqProc.is_alive()", acqProc.is_alive(), "logProc.is_alive()", logProc.is_alive(), "plotProc.is_alive()", plotProc.is_alive())
 	log.info("Joining on LogProc")
 	while logProc.is_alive():
 		logProc.join(0.1)
 		# print("acqProc.is_alive()", acqProc.is_alive(), "logProc.is_alive()", logProc.is_alive(), "plotProc.is_alive()", plotProc.is_alive())
-	log.info("Joining on PlotProc")
-	while plotProc.is_alive():
-		plotProc.join(0.1)
-		# print("acqProc.is_alive()", acqProc.is_alive(), "logProc.is_alive()", logProc.is_alive(), "plotProc.is_alive()", plotProc.is_alive())
 
 
-	log.info("Joining on PlotProc")
+	if not gpsTest:
+		log.info("Joining on PlotProc")
+		while plotProc.is_alive():
+			plotProc.join(0.1)
+			# print("acqProc.is_alive()", acqProc.is_alive(), "logProc.is_alive()", logProc.is_alive(), "plotProc.is_alive()", plotProc.is_alive())
+
+	if gpsTest:
+		print("Faking halt signals")
+		ctrlNs.apiRunning = False
+
+	print("Joining on PrintProc")
 	while printProc.is_alive():
 		printProc.join(0.05)
+		print("wating on printProc")
 
 
 

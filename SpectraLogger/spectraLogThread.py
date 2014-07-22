@@ -40,6 +40,8 @@ def logSweeps(dataQueue, ctrlNs, printQueue, test=False):
 	log = logging.getLogger("Main.LogProcess")
 	logSetup.initLogging(printQ = printQueue)
 
+	log.info("Logging thread starting")
+
 	# the size of the acquisiton array can vary. Therefore, we wait for the acq thread to send a message containing
 	# the array size before allocating the HDF5 array.
 	if not test:
@@ -70,7 +72,7 @@ def logSweeps(dataQueue, ctrlNs, printQueue, test=False):
 def logIter(dataQueue, ctrlNs, printQueue, arrWidth, test=False):
 
 
-	log = logging.getLogger("Main.LogProcess")
+	log = logging.getLogger("Main.LogProcess.Func")
 	loop_timer = time.time()
 
 	logName = time.strftime("Datalog - %Y %m %d, %a, %H-%M-%S.h5", time.localtime())
@@ -137,7 +139,7 @@ def logIter(dataQueue, ctrlNs, printQueue, arrWidth, test=False):
 					break
 
 
-			elif "settings" in tmp or "status" in tmp:
+			elif "settings" in tmp or "status" in tmp or "gps-info" in tmp:
 
 				if "settings" in tmp:
 					tmp["settings"]["averaging-interval"] = NUM_AVERAGE

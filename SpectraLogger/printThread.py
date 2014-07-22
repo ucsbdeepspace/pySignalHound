@@ -39,12 +39,13 @@ def printer(printQueue, ctrlNs):
 
 
 		if ctrlNs.acqRunning == False and ctrlNs.apiRunning == False:
-			log.info("Stopping Printing-thread!")
+			print("Stopping Printing-thread!")
 			break
 
 		time.sleep(0.001)
 
 
-	log.info("Log-thread exiting!")
+	print("Print-thread exiting!")
 	printQueue.close()
 	printQueue.join_thread()
+	print("Print-thread exited!")
