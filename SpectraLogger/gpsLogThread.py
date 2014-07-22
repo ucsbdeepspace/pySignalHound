@@ -19,6 +19,7 @@ lib_path = os.path.abspath('../')
 print "Lib Path = ", lib_path
 sys.path.append(lib_path)
 
+import datetime
 import logging
 import logSetup
 import time
@@ -36,9 +37,21 @@ def startGpsLog(dataQueues, ctrlNs, printQueue):
 class GpsLogThread(object):
 	log = logging.getLogger("Main.GpsProcess")
 
+	message = {
+		'latitude' : None,
+		'longitude' : None,
+		'numsatview' : None,
+		'fix_type' : None,
+		'datetime' : None,
+		'hdop' : None,
+	}
+
+	date = None
+	time = None
 	def __init__(self, printQueue):
 		self.printQueue = printQueue
 		logSetup.initLogging(printQ=printQueue)
+
 
 
 	def sweepSource(self, dataQueues, ctrlNs):
@@ -46,66 +59,25 @@ class GpsLogThread(object):
 		dataQueue, plotQueue = dataQueues
 
 
-		ser   = serial.Serial(GPS_COM_PORT, 4800, timeout=1)
+		ser   = serial.Serial(GPS_COM_PORT, 9600, timeout=1)
 		parse = pynmea2.NMEAStreamReader()
 
 
-		message = {'latitude' : None, 'longitude' : None, 'numsatview' : None, 'date': None, 'time' : None}
+		inBuf = ""
 
 		while 1:
-			time.sleep(0.1)
-			dat = ser.read(16)
+
+			inBuf += ser.read(16)
+			inBuf = inBuf.replace("\r\n", "\n")
+			inBuf = inBuf.replace("\r", "\n")
+			inBuf = inBuf.replace("$", "\n")
 			parsed = []
-			try:
-				parsed = parse.next(dat)
-			except UnicodeDecodeError:
-				print("Parse error!")
-				print(traceback.format_exc())
-				for key in message.keys():
-					message[key] = None
-			except pynmea2.nmea.ParseError:
-				print("Parse error!")
-				print(traceback.format_exc())
-				for key in message.keys():
-					message[key] = None
-			except pynmea2.nmea.ChecksumError:
-				print("Parse error!")
-				print(traceback.format_exc())
-				for key in message.keys():
-					message[key] = None
-			except ValueError:
-				print("Parse error!")
-				print(traceback.format_exc())
-				for key in message.keys():
-					message[key] = None
+			while "\n" in inBuf:
 
-			for msg in parsed:
-				if hasattr(msg, "latitude"):
-					message['latitude'] = msg.latitude
-					print("latitude", msg.latitude)
-				if hasattr(msg, "longitude"):
-					message['longitude'] = msg.longitude
-					print("longitude", msg.longitude)
-				if hasattr(msg, "num_sv_in_view"):
-					message['numsatview'] = msg.num_sv_in_view
-					print("sattelites", msg.num_sv_in_view)
-				if hasattr(msg, "timestamp"):
-					message['time'] = msg.timestamp
-					print("timestamp", msg.timestamp)
-				if hasattr(msg, "datestamp"):
-					message['date'] = msg.datestamp
-					print("datestamp", msg.datestamp)
-
-				if all(message.values()):
-					print("Complete message!", message)
-					for key in message.keys():
-						message[key] = None
-
-			# if ctrlNs.run == False:
-			# 	self.log.info("Stopping Acq-thread!")
-			# 	break
-
-
+				message, inBuf = inBuf.split("\n", 1)
+				message = message.strip()
+				if message:
+					self.parseMessage(message)
 
 
 
@@ -121,6 +93,69 @@ class GpsLogThread(object):
 		self.log.info("Acq-thread exiting!")
 		self.printQueue.close()
 		self.printQueue.join_thread()
+
+
+	def parseMessage(self, message):
+		try:
+			message = pynmea2.parse(message)
+			self.processMessage(message)
+		except UnicodeDecodeError:
+			self.log.error("Parse error!")
+			self.log.error(traceback.format_exc())
+			for key in self.message.keys():
+				self.message[key] = None
+		except pynmea2.nmea.ParseError:
+			self.log.error("Parse error!")
+			self.log.error(traceback.format_exc())
+			for key in self.message.keys():
+				self.message[key] = None
+		except pynmea2.nmea.ChecksumError:
+			self.log.error("Parse error!")
+			self.log.error(traceback.format_exc())
+			for key in self.message.keys():
+				self.message[key] = None
+		except ValueError:
+			self.log.error("Parse error!")
+			self.log.error(traceback.format_exc())
+			for key in self.message.keys():
+				self.message[key] = None
+
+	def processMessage(self, msg):
+		if hasattr(msg, "latitude"):
+			self.message['latitude'] = msg.latitude
+		if hasattr(msg, "longitude"):
+			self.message['longitude'] = msg.longitude
+		if hasattr(msg, "num_sats"):
+			self.message['numsatview'] = int(msg.num_sats)
+		if hasattr(msg, "mode_fix_type"):
+			self.message['fix_type'] = int(msg.mode_fix_type)
+		if hasattr(msg, "hdop"):
+			self.message['hdop'] = float(msg.hdop)
+		if hasattr(msg, "timestamp") and not isinstance(msg.timestamp, basestring):
+			self.time = msg.timestamp
+		if hasattr(msg, "datestamp"):
+			self.date = msg.datestamp
+
+		if self.date and self.time:
+			self.message['datetime'] = datetime.datetime.combine(self.date, self.time)
+		# We have everything we want
+		if all(self.message.values()) and self.date and self.time:
+
+			self.log.info("Complete self.message = %s!", self.message)
+			self.clearData()
+
+
+
+		# if ctrlNs.run == False:
+		# 	self.log.info("Stopping Acq-thread!")
+		# 	break
+
+	def clearData(self):
+		self.date = None
+		self.time = None
+
+		for key in self.message.keys():
+			self.message[key] = None
 
 
 
