@@ -146,7 +146,7 @@ class GpsLogThread(object):
 		# We have everything we want
 		if all(self.message.values()) and self.date and self.time:
 			self.log.info("Complete self.message = %s. emitting to logger!", self.message)
-			self.dataQueue.put({"gps-info" : self.message})
+			self.dataQueue.put({"gps-info" : self.message.copy()})
 			self.clearData()
 
 
