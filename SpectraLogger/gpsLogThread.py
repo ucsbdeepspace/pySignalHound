@@ -44,6 +44,8 @@ class GpsLogThread(object):
 		'numsatview' : None,
 		'fix_type' : None,
 		'datetime' : None,
+		'altitude' : None,
+		'altitude_units' : None,
 		'hdop' : None,
 	}
 
@@ -130,6 +132,10 @@ class GpsLogThread(object):
 			self.message['latitude'] = msg.latitude
 		if hasattr(msg, "longitude"):
 			self.message['longitude'] = msg.longitude
+		if hasattr(msg, "altitude"):
+			self.message['altitude'] = msg.altitude
+		if hasattr(msg, "altitude_units"):
+			self.message['altitude_units'] = msg.altitude_units
 		if hasattr(msg, "num_sats"):
 			self.message['numsatview'] = int(msg.num_sats)
 		if hasattr(msg, "mode_fix_type"):

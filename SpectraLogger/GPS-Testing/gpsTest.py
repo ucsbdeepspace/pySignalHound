@@ -3,6 +3,7 @@
 import sys
 import h5py
 import cPickle as pik
+import simplekml
 
 
 def openFile(filePath):
@@ -24,16 +25,21 @@ def go(h5file):
 	print dat["Acq_info"].shape
 
 	points = []
+
 	for row in dat["Acq_info"]:
 		time, dataDict = pik.loads(row)
 
 		if "gps-info" in dataDict:
 			gpsDict = dataDict["gps-info"]
 			if gpsDict['latitude'] and gpsDict['longitude']:
-				points.append((gpsDict['latitude'], gpsDict['longitude']))
+				points.append((gpsDict['longitude'], gpsDict['latitude']))
 
 	if points:
 		print(points)
+
+	kml = simplekml.Kml()
+	kml.newlinestring(name="path", coords=points)
+	kml.save(h5file+".kml")
 
 
 if __name__ == "__main__":
