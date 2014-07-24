@@ -59,7 +59,7 @@ def go():
 	ctrlNs.stopped = False
 
 
-	gpsTest = True
+	gpsTest = False
 
 	if not gpsTest:
 		if settings.ACQ_TYPE == "real-time-sweeping":

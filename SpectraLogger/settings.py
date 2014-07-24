@@ -17,11 +17,11 @@ ACQ_FREQ               = 175e6
 ACQ_SPAN               = 300e6
 
 # Reference level of the acquisition
-ACQ_REF_LEVEL_DB       = 15
+ACQ_REF_LEVEL_DB       = 20
 
 # Attenuation and gain for the acquisition. Ranges: 0-3, -1 for "auto", where the hardware tries to determine the ideal gain/attenuation from the specified reference level.
-ACQ_ATTENUATION_DB     = 0
-ACQ_GAIN_SETTING       = 2
+ACQ_ATTENUATION_DB     = -1
+ACQ_GAIN_SETTING       = -1
 
 # Realtime Bandwith (e.g. bin-size) of the FFT.
 #Possible values:
@@ -78,7 +78,7 @@ ACQ_TYPE               = "real-time-sweeping"
 # Don't actually use 1 (100%). Shit would break.
 ACQ_OVERLAP            = 0.5
 # Number of scans to take at each frequency
-ACQ_BIN_SAMPLES        = 1000
+ACQ_BIN_SAMPLES        = 600
 
 
 # The acquired data modes. Valid options are "average" and "min-max"
@@ -121,7 +121,7 @@ FILE_ROTATION_INTERVAL = 60 * 60 # 1 hour
 # If you set GPS_COM_PORT to None, GPS logging is disabled
 # If GPS_COM_PORT is not none, the system will try to open the port GPS_COM_PORT, and
 # expect to receive a NMEA gps data stream.
-# GPS_COM_PORT = 'COM3'
-GPS_COM_PORT = 'COM14'
+GPS_COM_PORT = 'COM3'
+# GPS_COM_PORT = 'COM14'
 # GPS_COM_PORT = '/dev/tty.PL2303-00001014'
 
