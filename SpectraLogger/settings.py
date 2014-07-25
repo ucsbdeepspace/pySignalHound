@@ -20,8 +20,8 @@ ACQ_SPAN               = 300e6
 ACQ_REF_LEVEL_DB       = 20
 
 # Attenuation and gain for the acquisition. Ranges: 0-3, -1 for "auto", where the hardware tries to determine the ideal gain/attenuation from the specified reference level.
-ACQ_ATTENUATION_DB     = -1
-ACQ_GAIN_SETTING       = -1
+ACQ_ATTENUATION_DB     = 30
+ACQ_GAIN_SETTING       = 0
 
 # Realtime Bandwith (e.g. bin-size) of the FFT.
 #Possible values:

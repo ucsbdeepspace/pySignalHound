@@ -97,74 +97,63 @@ def startApiServer(dataQueue, ctrlNs, printQueue):
 					binSize = dat["arr-bin-size"]
 					numBins = dat["arr-size"]
 
-				if "data" in tmp and "info" in tmp and "max" in tmp["data"]:
-					dat = tmp["info"]
-					startFreq = dat["ret-start-freq"]
-					binSize = dat["arr-bin-size"]
-					numBins = dat["arr-size"]
 
-					if runningSum.shape != tmp["data"]["max"].shape:
-						runningSum = np.zeros_like(tmp["data"]["max"])
-						runningSumItems = 0
+				elif "row" in tmp:
+					arr = tmp["row"][4]
+					startFreq = tmp["row"][1]
+					binSize = tmp["row"][2]
+					numBins = tmp["row"][4].shape[0]
 
-					runningSum += tmp["data"]["max"]
-					runningSumItems += 1
+
+					outDict = {"startFreq":startFreq,
+								"numBins":numBins,
+								"binSize": binSize,
+								"data":arr}
+
+					pData = cPickle.dumps(outDict, protocol=cPickle.HIGHEST_PROTOCOL)
+					pData = "BEGIN_DATA"+pData+"END_DATA"
+
+					runningSum = np.zeros_like(runningSum)
+					runningSumItems = 0
+					try:
+						# Holy shit, sok.send is MUCH faster then sok.sendall. Wat?
+						# I bet sendall() is sending each byte at a time from native python, rather then just calling send() from the OS
+						# API directly on the buffer to send. Stupid.
+						msgLen = len(pData)
+						totalsent = 0
+						while totalsent < msgLen:
+							sent = sok.send(pData[totalsent:])
+							if sent == 0:
+								raise RuntimeError("socket connection broken")
+							totalsent = totalsent + sent
+
+						dataChunks += 1
+					except BufferError:
+						log.error("Transmission failed to properly transmit all bytes")
+						log.error(traceback.format_exc())
+
+					except socket.timeout:
+						log.error("Timeout on transmit?")
+						log.error(traceback.format_exc())
+					except AttributeError:
+						# I have NO idea how this was happening, but somehow sok.sendall was being called after
+						# sok had been set = None.
+						log.error("WAT?")
+						log.error(traceback.format_exc())
+						continue
+
+
+					except socket.error:
+						log.error("Socket Error!")
+						log.error(traceback.format_exc())
+						sok = None
+						log.error("Closing socket connection.")
+
+
 				else:
 					log.error("WAT? Unknown packet!")
+					log.error("WAT? \"row\" in tmp - %s", "row" in tmp)
 					log.error(tmp)
-
-
-			if runningSumItems > settings.NUM_PLOT_AVERAGE:
-
-				# print "Array shape = ", arr.shape
-				arr = runningSum / runningSumItems
-				# print arr.shape
-
-				outDict = {"startFreq":startFreq,
-							"numBins":numBins,
-							"binSize": binSize,
-							"data":arr}
-
-				pData = cPickle.dumps(outDict, protocol=cPickle.HIGHEST_PROTOCOL)
-				pData = "BEGIN_DATA"+pData+"END_DATA"
-
-				runningSum = np.zeros_like(runningSum)
-				runningSumItems = 0
-				try:
-					# Holy shit, sok.send is MUCH faster then sok.sendall. Wat?
-					# I bet sendall() is sending each byte at a time from native python, rather then just calling send() from the OS
-					# API directly on the buffer to send. Stupid.
-					msgLen = len(pData)
-					totalsent = 0
-					while totalsent < msgLen:
-						sent = sok.send(pData[totalsent:])
-						if sent == 0:
-							raise RuntimeError("socket connection broken")
-						totalsent = totalsent + sent
-
-					dataChunks += 1
-				except BufferError:
-					log.error("Transmission failed to properly transmit all bytes")
-					log.error(traceback.format_exc())
-
-				except socket.timeout:
-					log.error("Timeout on transmit?")
-					log.error(traceback.format_exc())
-				except AttributeError:
-					# I have NO idea how this was happening, but somehow sok.sendall was being called after
-					# sok had been set = None.
-					log.error("WAT?")
-					log.error(traceback.format_exc())
-					continue
-
-
-				except socket.error:
-					log.error("Socket Error!")
-					log.error(traceback.format_exc())
-					sok = None
-					log.error("Closing socket connection.")
-
-
 
 		if ctrlNs.acqRunning == False:
 			log.info("Stopping API-thread!")
