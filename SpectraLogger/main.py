@@ -39,7 +39,7 @@ import printThread
 import settings
 
 
-def go():
+def go(logGps=False, gpsTest=False):
 
 
 
@@ -59,7 +59,6 @@ def go():
 	ctrlNs.stopped = False
 
 
-	gpsTest = False
 
 	if not gpsTest:
 		if settings.ACQ_TYPE == "real-time-sweeping":
@@ -71,9 +70,9 @@ def go():
 
 		acqProc.start()
 
-
-	gpsProc = mp.Process(target=gpsLogThread.startGpsLog, name="GpsThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
-	gpsProc.start()
+	if logGps:
+		gpsProc = mp.Process(target=gpsLogThread.startGpsLog, name="GpsThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
+		gpsProc.start()
 
 	logProc = mp.Process(target=spectraLogThread.logSweeps, name="LogThread", args=(dataQueue, ctrlNs, printQueue, gpsTest))
 	logProc.start()
@@ -121,14 +120,14 @@ def go():
 		log.info("Joining on AcqProc")
 		while acqProc.is_alive():
 			acqProc.join(0.1)
+	if logGps:
+		log.info("Joining on GpsProc")
+		while gpsProc.is_alive():
+			gpsProc.join(0.1)
 
-	log.info("Joining on GpsProc")
-	while gpsProc.is_alive():
-		gpsProc.join(0.1)
-
-	if gpsTest:
-		print("Faking halt signals")
-		ctrlNs.acqRunning = False
+		if gpsTest:
+			print("Faking halt signals")
+			ctrlNs.acqRunning = False
 
 
 		# print("acqProc.is_alive()", acqProc.is_alive(), "logProc.is_alive()", logProc.is_alive(), "plotProc.is_alive()", plotProc.is_alive())
@@ -163,6 +162,49 @@ def go():
 
 	sys.exit()
 
+def parseArgs():
+	if len(sys.argv) == 1:
+		print("Python Signal-Hound spectra logging tool.")
+		print("")
+		print("	Error: No arguments specified.")
+		print("")
+		print("	Arguments")
+		print("		--go         Begin acquisition (if not specified, this message is printed)")
+		print("		--gps        Take GPS data. Requires a USB GPS if specified.")
+		print("		--gps-only   Take GPS data and *not* spectra. Intended for verifying GPS functionality.")
+
+
+		return
+
+	availableArgs = ["--go", "--gps", "--gps-only"]
+
+	args = sys.argv[1:]
+
+	badArgs = [arg for arg in args if arg not in availableArgs]
+
+	if badArgs:
+		print("ERROR")
+		print("Invalid command line argument")
+		for arg in badArgs:
+			print ("Did not understand '%s'" % arg)
+		return
+
+	logGps = False
+	if "--gps" in args:
+		logGps = True
+		print("Taking GPS position data. Please ensure you have a GPS device connected")
+
+	gpsTest = False
+	if "--gps-only" in args:
+		logGps = True
+		gpsTest = True
+		print("GPS Testing mode. Will not take actual spectra!")
+
+	if '--go' in args:
+		go(logGps=logGps, gpsTest=gpsTest)
+	else:
+		print("'--go' was not passed. Not doing actual acquisition.")
+
 if __name__ == "__main__":
 
-	go()
+	parseArgs()
