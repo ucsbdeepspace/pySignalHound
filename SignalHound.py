@@ -79,6 +79,8 @@ class SignalHound(object):
 	rawDataArrSize = 299008
 	rawSweepTriggerArraySize = 68
 
+	devType = None
+
 	def __init__(self):
 
 		self.log = logging.getLogger("Main.DeviceInt")
@@ -174,6 +176,9 @@ class SignalHound(object):
 				raise ValueError("Could not open device due to unknown reason!")
 
 		self.devOpen = True
+
+		self.devType = self.getDeviceType()
+
 		self.log.info("Opened Device with handle num: %s", self.deviceHandle.value)
 
 	def closeDevice(self):
@@ -368,6 +373,8 @@ class SignalHound(object):
 
 		self.acq_conf["center_freq"] = center
 		self.acq_conf["span_freq"] = span
+
+
 
 		self.log.info("Setting device frequency center & span settings.")
 		center = ct.c_double(center)
@@ -1100,14 +1107,12 @@ class SignalHound(object):
 		# device  Handle to the device being configured.
 		# mode  The possible values for mode are BB_SWEEPING, BB_REAL_TIME,
 		# 	BB_ZERO_SPAN, BB_TIME_GATE, BB_RAW_SWEEP,
-		# 	BB_RAW_SWEEP_LOOP, BB_AUDIO_DEMOD, and BB_RAW_PIPE.
+		# 	BB_RAW_SWEEP_LOOP and BB_AUDIO_DEMOD.
 		# flag  The default value is zero.
 		# 	If mode equals BB_ZERO_SPAN, flag can be used to denote the type of
 		# 	modulation performed on the incoming signal. BB_DEMOD_AM and
 		# 	BB_DEMOD_FM are the two options.
-		# 	If mode equals BB_RAW_PIPE, flag is used to denote the retreived
-		# 	bandwidth. BB_SEVEN_MHZ or BB_TWENTY_MHZ is used to change the
-		# 	desired capture bandwidth. flag can be used to inform the API to time
+		# 	Flag can be used to inform the API to time
 		# 	stamp data using an external GPS reciever. Mask the bandwidth flag (‘|’
 		# 	in C) with BB_TIME_STAMP to achieve this. See Appendix:Using a GPS
 		# 	Receiver to Time-Stamp Data for information on how to set this up.
@@ -1129,8 +1134,7 @@ class SignalHound(object):
 			"time-gate"      : hf.BB_TIME_GATE,
 			"raw-sweep"      : hf.BB_RAW_SWEEP,
 			"raw-sweep-loop" : hf.BB_RAW_SWEEP_LOOP,
-			"audio-demod"    : hf.BB_AUDIO_DEMOD,
-			"raw-pipe"       : hf.BB_RAW_PIPE
+			"audio-demod"    : hf.BB_AUDIO_DEMOD
 		}
 
 		zeroSpanOpts = {
@@ -1138,10 +1142,6 @@ class SignalHound(object):
 			"demod-fm" : hf.BB_DEMOD_FM
 		}
 
-		rawPipeOpts = {
-			"7-mhz"    : hf.BB_DEMOD_AM,
-			"20-mhz"   : hf.BB_DEMOD_FM
-		}
 
 		if mode in modeOpts:
 			mode = modeOpts[mode]
@@ -1159,18 +1159,11 @@ class SignalHound(object):
 				raise ValueError("Available flag settings for mode \"zero-span\" are \"demod-am\" and \"demod-fm\". Passed value was %s." % flag)
 
 		# Checking for raw-pipe mode is messy, since it uses the same configuration value as the streaming mode.
-		elif mode == hf.BB_RAW_PIPE and self.acq_conf["acq_mode"] == "raw-pipe":
-			if flag in rawPipeOpts:
-				flag = rawPipeOpts[flag]
-			else:
-				raise ValueError("Available flag settings for mode \"raw-pipe\" are \"7-mhz\" or \"20-mhz\". Passed value was %s." % flag)
-
-
+		elif self.acq_conf["acq_mode"] == "raw-pipe":
+			raise ValueError("Raw pipe mode is depreciated, and has been removed.")
 
 		else:
 			flag = 0
-
-		self.log.warning("Add checks for frequency limit across BB60a/BB60c")
 
 
 		if mode == hf.BB_REAL_TIME:
@@ -1178,7 +1171,16 @@ class SignalHound(object):
 				raise ValueError("You must call configureCenterSpan() before initiate()!")
 			elif (self.acq_conf["span_freq"] > hf.BB60C_MAX_RT_SPAN or
 				self.acq_conf["span_freq"] < hf.BB_MIN_RT_SPAN ):
-				raise ValueError("Real-time mode maximum span frequency is 27 Mhz. Specified span frequency = %f" % self.acq_conf["span_freq"])
+
+				if not self.devType:
+					raise ValueError("Device type not detected? How did this even occur!")
+				elif self.devType == "BB60C":
+					if self.acq_conf["span_freq"] > hf.BB60C_MAX_RT_SPAN:
+						raise ValueError("Real-time mode maximum span frequency is 27 Mhz for the BB60C. Specified span frequency = %f" % self.acq_conf["span_freq"])
+
+				elif self.devType == "BB60A":
+					if self.acq_conf["span_freq"] > hf.BB60A_MAX_RT_SPAN:
+						raise ValueError("Real-time mode maximum span frequency is 20 Mhz for the BB60A. Specified span frequency = %f" % self.acq_conf["span_freq"])
 
 			if not "rbw" in self.acq_conf:
 				raise ValueError("You must call configureSweepCoupling() before initiate()!")
@@ -1405,163 +1407,6 @@ class SignalHound(object):
 
 		return ret
 
-	def fetchRaw(self, ctDataBufPtr=None, ctTrigBufPtr=None):
-		# BB_API bbStatus bbFetchRaw(int device, float *buffer, int *triggers);
-
-		# device  Handle of a streaming device.
-		# buffer  A pointer to an array of length 299008. The contents of this buffer will
-		# 	be updated. The format of the data to be stored in buffer depends on
-		# 	the current mode of the device and which bbFetchRaw function is
-		# 	called.
-		# triggers  triggers is a pointer to an array of 68 integers representing external
-		# 	trigger information relative to the buffer. Read the description below
-		# 	for in-depth discussion.
-
-		# Fetch a chunk of data while the device is in the raw data pipe mode. A buffer will data represent either
-		# 299008/80,000,000 or 299008/20,000,000 seconds worth of time depending on the bandwidth selected
-		# at initiate. The structure of the data is described in Modes of Operation:Raw Data. To ensure full
-		# coverage the function must be called ~267 times with a 20 MHz bandwidth and ~67 with 7 MHz
-		# bandwidth. Only 120ms of data is buffered before data loss occurs. Ensure no additional processing or
-		# disk I/O is occuring in the same thread as the one acquiring the data to ensure no data loss.
-		# The values returned in buffer represent full scale. For 32-bit floating point samples, the values range
-		# from -1.0 to 1.0. For 16-bit signed short samples, the values range from -2 15 to 2 15 -1. Values at or near
-		# the absolute max might indicate compression. Adjusting gain and attenuation is the best way to achieve
-		# the most dynamic range of samples returned.
-		# The triggers parameter can be null(0) if you are not interested in trigger position, otherwise triggers
-		# should point to an array of 68 32-bit integers. Starting at triggers[0], positive values will indicate
-		# positions within the returned buffer array where an external trigger occurred. The positions are zero
-		# based, meaning the positions will be between 0 and 299007. (Note: the minimum trigger position
-		# detected is approximately 90) If no triggers occurred during the acquisition of the raw data, all values
-		# will be 0. If for example, 3 external triggers occurred during the acquisition, the first three values of the
-		# triggers array will be non-negative, and the remaining equal to 0. A returned trigger array might look like
-		# this.
-		# The filters used to downconvert the 20 MHz IF to 7 MHz IQ cause the data to incur a 3.3 micro second
-		# delay which is accounted for in the trigger index values.
-		# triggerArray[68] = [917, 46440, 196264, 0, 0, …, 0];
-		# This array indicates three external triggers were detected at buffer[917], buffer[46440], and
-		# buffer[196264]. They will always be in increasing order.
-		# Only the first 17 triggers will be registered every 1/267 th of a second.
-		# Note: The ports on a broadband device need to be configured to receive external triggers to take
-		# advantage of the trigger array.
-		# See the Code Examples for an example of this function.
-		# The values returned are in the time domain and are uncorrected. (See bbFetchRawCorrections() for
-		# information on making amplitude corrections on the raw data)
-
-		# If you pass ctDataBufPtr or ctTrigBufPtr, the data will be written into the passed ctypes array that is pointed to by the passed pointer,
-		# rather then allocating a local ctypes array, and decoding the returned data into a numpy array before returning
-		# You can get the size of the buffer by calling getRawSweep_size(), getRawSweep_s_size() and getRawSweepTrig_size()
-
-		if not ctDataBufPtr:
-			rawBuf = (ct.c_float * self.rawDataArrSize)()
-			rawBufPtr = ct.pointer(rawBuf)
-		else:
-			rawBufPtr = ctDataBufPtr
-
-		if not ctTrigBufPtr:
-			triggers = (ct.c_int * self.rawSweepTriggerArraySize)()
-			triggersPtr = ct.pointer(triggers)
-		else:
-			triggersPtr = ctTrigBufPtr
-
-
-
-		err = self.dll.bbFetchRaw(self.deviceHandle, rawBufPtr, triggersPtr)
-
-		if err == self.bbStatus["bbNoError"]:
-			self.sequentialADCErrors = 0  # There was no clipping, so reset the clipping integrator
-			# No print statements here. Too noisy
-
-		elif err == self.bbStatus["bbNullPtrErr"]:
-			raise IOError("Null pointer error!")
-		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
-			raise IOError("Device not open!")
-		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
-			raise IOError("Device not Configured!")
-		elif err == self.bbStatus["bbADCOverflow"]:
-			self.sequentialADCErrors += 1
-
-			# Only throw an actual error if we've been clipping for a while.
-			# This way, transients won't break things (as fast, in any event).
-			if self.sequentialADCErrors > 10:
-				raise IOError("The ADC has detected clipping of the input signal for more then 10 sequential samples!")
-
-		elif err == self.bbStatus["bbPacketFramingErr"]:
-			raise IOError("Data loss or miscommunication has occurred between the device and the API!")
-		elif err == self.bbStatus["bbDeviceConnectionErr"]:
-			raise IOError("Device connection issues were present in the acquisition of this sweep!")
-		else:
-			raise IOError("Unknown error setting fetchRaw! Error = %s" % err)
-
-		ret = {}
-
-		if not ctDataBufPtr:
-			ret["data"] = SignalHound.fastDecodeArray(rawBuf, self.rawDataArrSize, np.float32)
-
-		if not ctTrigBufPtr:
-			ret["triggers"] = SignalHound.fastDecodeArray(triggers, self.rawSweepTriggerArraySize, np.int32)
-
-
-		return ret
-
-	def fetchRaw_s(self, ctDataBufPtr=None, ctTrigBufPtr=None):
-		# BB_API bbStatus bbFetchRaw_s(int device, short *buffer, int *triggers);
-
-		# This is functionally identical to fetchRaw, only it returns an array of shorts, rather then floats.
-
-
-		if not ctDataBufPtr:
-			rawBuf = (ct.c_short * self.rawDataArrSize)()
-			rawBufPtr = ct.pointer(rawBuf)
-		else:
-			rawBufPtr = ctDataBufPtr
-
-		if not ctTrigBufPtr:
-			triggers = (ct.c_int * self.rawSweepTriggerArraySize)(0)
-			triggersPtr = ct.pointer(triggers)
-		else:
-			triggersPtr = ctTrigBufPtr
-
-
-
-		err = self.dll.bbFetchRaw_s(self.deviceHandle, rawBufPtr, triggersPtr)
-
-		if err == self.bbStatus["bbNoError"]:
-			self.sequentialADCErrors = 0
-			# No print statements here. Too noisy
-
-		elif err == self.bbStatus["bbNullPtrErr"]:
-			raise IOError("Null pointer error!")
-		elif err == self.bbStatus["bbDeviceNotOpenErr"]:
-			raise IOError("Device not open!")
-		elif err == self.bbStatus["bbDeviceNotConfiguredErr"]:
-			raise IOError("Device not Configured!")
-		elif err == self.bbStatus["bbADCOverflow"]:
-			self.sequentialADCErrors += 1
-
-			# Only throw an actual error if we've been clipping for a while.
-			# This way, transients won't break things (as fast, in any event).
-			if self.sequentialADCErrors > 10:
-				raise IOError("The ADC has detected clipping of the input signal for more then 10 sequential samples!")
-
-
-		elif err == self.bbStatus["bbPacketFramingErr"]:
-			raise IOError("Data loss or miscommunication has occurred between the device and the API!")
-		elif err == self.bbStatus["bbDeviceConnectionErr"]:
-			raise IOError("Device connection issues were present in the acquisition of this sweep!")
-		else:
-			raise IOError("Unknown error setting fetchRaw_s! Error = %s" % err)
-
-
-		ret = {}
-
-		if not ctDataBufPtr:
-			ret["data"] = SignalHound.fastDecodeArray(rawBuf, self.rawDataArrSize, np.short)
-
-		if not ctTrigBufPtr:
-			ret["triggers"] = SignalHound.fastDecodeArray(triggers, self.rawSweepTriggerArraySize, np.int32)
-
-
-		return ret
 
 	@classmethod
 	def getRawSweep_size(cls):

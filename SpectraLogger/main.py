@@ -32,7 +32,7 @@ import logging
 import spectraAcqThread
 import internalSweepSpectraAcqThread
 import spectraLogThread
-import gpsLogThread
+
 import spectraPlotApiThread
 import printThread
 
@@ -40,8 +40,6 @@ import settings
 
 
 def go(logGps=False, gpsTest=False):
-
-
 
 	plotQueue = mp.Queue()
 	dataQueue = mp.Queue()
@@ -58,9 +56,10 @@ def go(logGps=False, gpsTest=False):
 	ctrlNs.logRunning = True
 	ctrlNs.stopped = False
 
+	if not settings.GPS_COM_PORT:
+		print("WARNING: No GPS port specified. GPS mode can not work.")
 
-
-	if not gpsTest:
+	if not gpsTest :
 		if settings.ACQ_TYPE == "real-time-sweeping":
 			print("Importing real-time-sweeping module!")
 			acqProc = mp.Process(target=internalSweepSpectraAcqThread.sweepSource, name="AcqThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
@@ -70,7 +69,8 @@ def go(logGps=False, gpsTest=False):
 
 		acqProc.start()
 
-	if logGps:
+	if logGps and settings.GPS_COM_PORT:
+		import gpsLogThread
 		gpsProc = mp.Process(target=gpsLogThread.startGpsLog, name="GpsThread", args=((dataQueue, plotQueue), ctrlNs, printQueue))
 		gpsProc.start()
 
@@ -120,7 +120,7 @@ def go(logGps=False, gpsTest=False):
 		log.info("Joining on AcqProc")
 		while acqProc.is_alive():
 			acqProc.join(0.1)
-	if logGps:
+	if logGps and settings.GPS_COM_PORT:
 		log.info("Joining on GpsProc")
 		while gpsProc.is_alive():
 			gpsProc.join(0.1)

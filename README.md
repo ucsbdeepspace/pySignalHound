@@ -9,8 +9,10 @@ Predominantly, all C API errors should be caught, and re-raised as python except
 
 Also, there is *some* error checking for function parameters. I should probably go through and add `{library}.{function}.restype = {something}` type hints to all the function calls, but I think the fact that I'm explicitly casting all parameters to ctypes values should somewhat ameliorate that need.
 
-At the moment, the one function that takes a callback (`bbStartRawSweepLoop`) properly wraps a passed python function, so it gets called via the C callback,
-though it still relys on the user decoding the C function call arguments. I want to do something about that in the near future.
+~~At the moment, the one function that takes a callback (`bbStartRawSweepLoop`) properly wraps a passed python function, so it gets called via the C callback,
+though it still relys on the user decoding the C function call arguments. I want to do something about that in the near future.~~ (Raw sweep mode is depreciated.)
+
+Currently, I can only test with a BB60C, as that is the only unit I have on-hand. It should work with a BB60A without too much trouble, though (it has provisions for it, and I did my initial dev work with a BB60A. I just upgraded later).
 
 
 ---

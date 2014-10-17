@@ -260,6 +260,91 @@ def testSweeps(sh):
 
 	sh.abort()
 
+def interruptedSweeping(sh):
+	global START_TIME  #hacking about for determining callback interval times. I shouldn't be using global, but fukkit.
+
+	START_TIME = time.time()
+	loops = 0
+
+	sh.configureAcquisition("average", "log-scale")
+	sh.configureCenterSpan(center = 150e6, span = 100e6)
+	sh.configureLevel(ref = 10, atten = "auto")
+	sh.configureGain(gain = 0)
+	sh.configureSweepCoupling(rbw = 9.863e3, vbw = 9.863e3, sweepTime = 0.10, rbwType = "native", rejection = "no-spur-reject")
+	sh.configureWindow(window = "hamming")
+	sh.configureProcUnits(units = "power")
+	sh.configureTrigger(trigType = "none", edge = "rising-edge", level = 0, timeout = 5)
+	# sh.configureIO("dc", "int-ref-out", "out-logic-low")
+	# sh.configureDemod("fm", 102.3e6, 250e3, 12e3, 20, 50)
+
+	# sh.configureRawSweep(100, 8, 2)
+	# sh.initiate("raw-sweep-loop", 0)
+	# print sh.queryTimestamp()
+	# sh.startRawSweepLoop(callbackTestFunc)
+
+	# ret = sh.fetchRawCorrections()
+	# for key, value in ret.iteritems():
+	# 	print key, value
+
+	# for item in ret["data"]:
+	# 	st = "%f" % item
+	# 	print st.rjust(12),
+	# 	if loops % 10 == 0:
+	# 		print
+	# 	loops += 1
+
+	out = open("dat.bin", "wb")
+
+	try:
+		while 1:
+
+			sh.initiate(mode = "sweeping", flag = "ignored")
+
+			print sh.queryTraceInfo()
+			try:
+				tmp = sh.fetchTrace()
+				DATA_LOG.append(tmp)
+				print(tmp)
+			except IOError:
+
+				print "ioerror"
+
+			if loops % 20 == 0:
+				print loops
+				now = time.time()
+				delta = now-START_TIME
+				freq = 1 / (delta / 20)
+				print "Elapsed Time = ", delta, "Frequency = ", freq
+				START_TIME = now
+			if len(DATA_LOG):
+				tmp = DATA_LOG.pop()
+				print np.array_str(tmp["max"], max_line_width = sys.maxint), len(tmp["max"])
+
+				outStr = ""
+				# outStr = "%s, " % time.time()
+				outStr += " ".join(['%f,' % num for num in tmp["max"]])
+				outStr = outStr.rstrip(", ").lstrip(", ")
+				outStr += "\n"
+
+
+
+				out.write(outStr)
+
+				# for item in tmp["max"]:
+				# 	 print item
+
+			loops += 1
+
+			sh.abort()
+
+		time.sleep(50)
+
+	except KeyboardInterrupt:
+		pass
+
+	out.close()
+
+
 def testGpsSweeps(sh):
 	global START_TIME  #hacking about for determining callback interval times. I shouldn't be using global, but fukkit.
 
@@ -406,6 +491,7 @@ def printUsage():
 		print "	'raw-pipe' - Try to log data from a raw-pipe connection to disk (warning - uses enormous amounts of disk space)"
 		print "	'callback' - Try to capture data via bbStartRawSweepLoop"
 		print "	'traces' - Fetch formatted traces, and log to disk"
+		print "	'int-traces' - Fetch formatted traces while continually restarting the acquisition, and log to disk"
 		print "	'iq' - Fetch IQ samples"
 		print "	'reset' - Reset the connected device"
 
@@ -421,14 +507,15 @@ def go():
 		sys.exit()
 
 	funcs = {
-		'radio'    : audioTest,
-		'status'   : testDeviceStatusQueries,
-		'raw-pipe' : testRawPipeMode,
-		'callback' : testCallback,
-		'traces'   : testSweeps,
-		'gps'      : testGpsSweeps,
-		'reset'    : resetDevice,
-		'iq'       : testIqStreaming
+		'radio'      : audioTest,
+		'status'     : testDeviceStatusQueries,
+		'raw-pipe'   : testRawPipeMode,
+		'callback'   : testCallback,
+		'traces'     : testSweeps,
+		'int-traces' : interruptedSweeping,
+		'gps'        : testGpsSweeps,
+		'reset'      : resetDevice,
+		'iq'         : testIqStreaming
 	}
 
 	if sys.argv[1] in funcs:
