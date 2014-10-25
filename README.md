@@ -17,7 +17,15 @@ Currently, I can only test with a BB60C, as that is the only unit I have on-hand
 
 ---
 
-The primary API file is `SignalHound.py`.
+Installation:
+
+`python setup.py install`
+
+This will drop the `bb_api.dll` dll in your `{python-dir}/DLLs/` directory, as well as install the SignalHound wrapper.
+
+---
+
+The primary API contained in the `SignalHound/__init__.py` file.
 
 `bb_api_h.py` is a transliteration of the bb_api.h file from the C api, and primarily defines most of the configuration constants used for controlling the SignalHound. It contains no executable code.
 
