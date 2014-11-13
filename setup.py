@@ -7,7 +7,7 @@ setup(
 	name="PySignalHound",
 
 	# Version number (initial):
-	version="0.0.1",
+	version="0.0.2",
 
 	# Application author details:
 	author="Connor Wolf",
@@ -23,7 +23,7 @@ setup(
 	data_files=[(sys.prefix + "/DLLs", ["SignalHound/data/bb_api.dll"])],
 
 	# Details
-	url="http://pypi.python.org/pypi/pySignalHound_v001/",
+	url="http://pypi.python.org/pypi/pySignalHound/",
 
 	#
 	# license="LICENSE.txt",
