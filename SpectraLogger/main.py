@@ -17,16 +17,8 @@
 
 # pylint: disable=R0913, R0912, W0603
 
-# Drag in path to the library (MESSY)
-import os, sys
-lib_path = os.path.abspath('../')
-print "Lib Path = ", lib_path
-sys.path.append(lib_path)
-
-
-
 import multiprocessing as mp
-
+import sys
 import logSetup
 import logging
 import spectraAcqThread

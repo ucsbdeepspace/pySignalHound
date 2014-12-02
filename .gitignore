@@ -5,3 +5,8 @@
 /Data/
 /InternalFFTSpectraLogger/*.pyc
 *.pyc
+/build/*
+/dist/*
+/PySignalHound.egg-info/*
+/SpectraLogger/GPS-Testing/Drive acq/*
+MANIFEST

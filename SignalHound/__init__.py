@@ -26,6 +26,8 @@ import sys
 
 if sys.platform == "win32":
 	from ctypes import wintypes as wt
+else:
+	raise ValueError("Only windows is currently supported by the SignalHound hardware.")
 
 import logging
 
@@ -97,6 +99,13 @@ class SignalHound(object):
 					libPath = "bb_api.dll"
 				elif os.path.exists("../bb_api.dll"):
 					libPath = "../bb_api.dll"
+
+				# So, apparently despite the fact that the setup.py script drops the signal hound
+				# dll in the python/DLLs directory, and the fact that that directory is in sys.path,
+				# find_library somehow doesn't find it anyways.
+				# As such, manually check the DLLs directory for the signalHound dll
+				elif os.path.exists(os.path.join(sys.exec_prefix, "DLLs", "bb_api.dll")):
+					libPath = os.path.join(sys.exec_prefix, "DLLs", "bb_api.dll")
 				else:
 					self.log.error("Could not locate signal hound DLL.")
 					raise EnvironmentError("Required DLL not available on system PATH")

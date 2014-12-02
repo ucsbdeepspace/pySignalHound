@@ -1,0 +1,5 @@
+
+include app/data/bb_api.dll
+include bb_api_h.py
+include SignalHound.py
+include tests.py
