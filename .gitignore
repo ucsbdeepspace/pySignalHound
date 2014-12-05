@@ -10,3 +10,5 @@
 /PySignalHound.egg-info/*
 /SpectraLogger/GPS-Testing/Drive acq/*
 MANIFEST
+/autodoc/t_build/doctrees
+/autodoc/t_build/
