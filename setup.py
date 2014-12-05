@@ -7,10 +7,10 @@ setup(
 	name="PySignalHound",
 
 	# Version number (initial):
-	version="0.0.1",
+	version="0.0.2",
 
 	# Application author details:
-	author="Connor Wolf	",
+	author="Connor Wolf",
 	author_email="github@imaginaryindustries.com",
 
 	# Packages
@@ -23,16 +23,18 @@ setup(
 	data_files=[(sys.prefix + "/DLLs", ["SignalHound/data/bb_api.dll"])],
 
 	# Details
-	url="http://pypi.python.org/pypi/MyApplication_v010/",
+	url="http://pypi.python.org/pypi/pySignalHound/",
 
 	#
 	# license="LICENSE.txt",
 	description="Wrapper for SignalHound spectrum analysers.",
 
-	# long_description=open("README.txt").read(),
+	long_description=open("README.md").read(),
 
 	# Dependent packages (distributions)
 	install_requires=[
 		"numpy",
 	],
 )
+
+
