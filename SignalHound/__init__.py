@@ -213,22 +213,33 @@ class SignalHound(object):
 
 	def getDeviceDiagnostics(self):
 		'''
-		BB_API bbStatus bbGetDeviceDiagnostics(int device, float *temperature, float *voltage1_8, float *voltage1_2, float *voltageUSB, float *currentUSB);
 
-		temperature  Pointer to 32bit float. If the function is successful temperature will point
-				to the current internal device temperature, in degrees Celsius. See
-				"bbSelfCal" for an explanation on why you need to monitor the device
-				temperature.
-		voltageUSB  USB operating voltage, in volts. Acceptable ranges are 4.40 to 5.25 V.
-		currentUSB  USB current draw, in mA. Acceptable ranges are 800 - 1000 mA
+		Query signal-hound's physical state and hardware status.
 
-		Pass NULL to any parameter you do not wish to query.
+		Args:
+			No Args
+		Returns:
+			dictionary containing current temperature, USB Voltage, and current:
+
+				| {
+				|	"temperature": <Internal temperature of the SignalHound in Degrees Celcius.>,
+				|	"voltageUSB":  <USB operating voltage, in volts. Acceptable ranges are 4.40 to 5.25 V.>,
+				|	"currentUSB":  <USB current draw, in mA. Acceptable ranges are 800 - 1000 mA>,
+				| }
+
+
 		The device temperature is updated in the API after each sweep is retrieved. The temperature is returned
 		in Celsius and has a resolution of 1/8 th of a degree. A temperature above 70 ° C or below 0 ° C indicates
 		your device is operating outside of its normal operating temperature, and may cause readings to be out
 		of spec, and may damage the device.
+
 		A USB voltage of below 4.4V may cause readings to be out of spec. Check your cable for damage and
 		USB connectors for damage or oxidation.
+
+		Will raise ``EnvironmentError`` for temperatures or voltages outside the allowable range.
+
+		Raw call ``BB_API bbStatus bbGetDeviceDiagnostics(int device, float *temperature, float *voltage1_8, float *voltage1_2, float *voltageUSB, float *currentUSB);``
+
 		'''
 
 		# self.log.info("Querying device diagnostics.")
@@ -269,7 +280,26 @@ class SignalHound(object):
 		return ret
 
 	def queryStreamInfo(self):
+		'''
+		Args:
+			No Args
+		Returns:
+			dictionary containing status information on the IQ data stream:
 
+				| {
+				|	"return_len":       <The number of IQ samples pairs which will be returned by calling ``bbFetchRaw()``.>,
+				|	"samples_per_sec":  <The number of IQ pairs to expect per second.>,
+				|	"bandwidth":        <The bandpass filter bandwidth, width in Hz. Width is specified by the 3dB rolloff points.>,
+				| }
+
+
+		Use this function to characterize the IQ data stream.
+
+		Will raise ``IOError`` If the device is not open, not streaming, or if an unknown error is encountered..
+
+		Raw call ``BB_API bbStatus bbQueryStreamInfo(int device, int *return_len, double *bandwidth, int *samples_per_sec);``
+
+		'''
 
 		return_len         = ct.c_int(0)
 		bandwidth          = ct.c_double(0)
@@ -303,24 +333,42 @@ class SignalHound(object):
 
 	def configureAcquisition(self, detector, scale):
 		'''
-		BB_API bbStatus bbConfigureAcquisition(int device, unsigned int detector, unsigned int scale);
 
-		detectorType  Specifies the video detector. The two possible values for detector type
-				are BB_AVERAGE and BB_MIN_AND_MAX.
-		verticalScale  Specifies the scale in which sweep results are returned int. The four
-				possible values for verticalScale are BB_LOG_SCALE, BB_LIN_SCALE,
-				BB_LOG_FULL_SCALE, and BB_LIN_FULL_SCALE
+		Args:
+			detectorType (string): Specifies the video detector. The two possible values for detector type
+					are:
+					 - "average" (mapped to ``BB_AVERAGE``)
+					 - "min-max" (mapped to ``BB_MIN_AND_MAX``).
+			verticalScale (string):  Specifies the scale in which sweep results are returned int. The four
+					possible values for verticalScale are:
+					 - "log-scale" (mapped to ``BB_LOG_SCALE``)
+					 - "lin-scale" (mapped to ``BB_LIN_SCALE``),
+					 - "log-full-scale" (mapped to ``BB_LOG_FULL_SCALE``)
+					 - "lin-full-scale" (mapped to ``BB_LIN_FULL_SCALE``)
+		Returns:
+			Nothing
 
-		The verticalScale parameter will change the units of returned sweeps. If BB_LOG_SCALE is provided
-		sweeps will be returned in amplitude unit dBm. If BB_LIN_SCALE is return, the returned units will be in
+		The verticalScale parameter will change the units of returned sweeps. If ``BB_LOG_SCALE`` is provided
+		sweeps will be returned in amplitude unit dBm. If ``BB_LIN_SCALE`` is specified, the returned units will be in
 		millivolts. If the full scale units are specified, no corrections are applied to the data and amplitudes are
 		taken directly from the full scale input.
+
 		detectorType specifies how to produce the results of the signal processing for the final sweep.
 		Depending on settings, potentially many overlapping FFTs will be performed on the input time domain
 		data to retrieve a more consistent and accurate final result. When the results overlap detectorType
 		chooses whether to average the results together, or maintain the minimum and maximum values. If
 		averaging is chosen the min and max trace arrays returned from bbFetchTrace will contain the same
 		averaged data
+
+		Will raise ``ValueError`` if invalid strings are passed (e.g. they're not one of the specified values above).
+
+		Will raise ``IOError`` for the following error-codes:
+		 - ``bbDeviceNotOpenErr`` - "Device not open!"
+		 - ``bbInvalidDetectorErr`` - "Invalid Detector mode!"
+		 - ``bbInvalidScaleErr`` - "Invalid scale setting error!"
+		 - Any unknown errors
+
+		Raw call: ``BB_API bbStatus bbConfigureAcquisition(int device, unsigned int detector, unsigned int scale);``
 		'''
 
 		self.acq_conf["detector"] = detector
@@ -333,8 +381,8 @@ class SignalHound(object):
 
 		scaleVals = {
 			"log-scale"      : ct.c_uint(hf.BB_LOG_SCALE),
-			"log-full-scale" : ct.c_uint(hf.BB_LOG_FULL_SCALE),
 			"lin-scale"      : ct.c_uint(hf.BB_LIN_SCALE),
+			"log-full-scale" : ct.c_uint(hf.BB_LOG_FULL_SCALE),
 			"lin-full-scale" : ct.c_uint(hf.BB_LIN_FULL_SCALE)
 		}
 
@@ -365,22 +413,30 @@ class SignalHound(object):
 
 	def configureCenterSpan(self, center, span):
 		'''
-		BB_API bbStatus bbConfigureCenterSpan(int device, double center, double span);
 
-		center 	Center frequency in hertz.
-		span  	Span in hertz
+		Args:
+			center (float): 	Center frequency in hertz.
+			span (float):  	Span in hertz
 
 		This function configures the operating frequency band of the broadband device. Start and stop
 		frequencies can be determined from the center and span.
+
 		-  start = center - (span/2)
 		-  stop = center+(span/2)
+
 		The values provided are used by the device during initialization and a more precise start frequency is
 		returned after initiation. Refer to the bbQueryTraceInfo function for more information.
-		Each device has a specified operational frequency range. These limits are BB#_MIN_FREQ and
-		BB#_MAX_FREQ. The center and span provided cannot specify a sweep outside of this range.
-		There is also an absolute minimum operating span.
+
+		Each device has a specified operational frequency range. These limits are ``BB#_MIN_FREQ`` and
+		``BB#_MAX_FREQ``, where ``#`` is the signal-hound model number (see ``bb_api_h.py``). The center and
+		span provided cannot specify a sweep outside of this range. There is also an absolute minimum operating span.
+
 		Certain modes of operation have specific frequency range limits. Those mode dependent limits are
 		tested against during initialization and not here.
+
+		Raises ``IOError`` on errors.
+
+		Raw call: ``BB_API bbStatus bbConfigureCenterSpan(int device, double center, double span);``
 		'''
 
 		self.acq_conf["center_freq"] = center
@@ -408,21 +464,27 @@ class SignalHound(object):
 
 	def configureLevel(self, ref, atten):
 		'''
-		BB_API bbStatus bbConfigureLevel(int device, double ref, double atten);
 
-		Reference and attenuation in dBm
-		ref		Reference level in dBm.
-		atten		Attenuation setting in dB. If attenuation provided is negative,
-			attenuation is selected automatically.
+		Args:
+			ref (float): Reference level in dBm.
+			atten (float): Attenuation setting in dB. If attenuation provided is negative, attenuation is selected automatically.
+				``atten`` must be a integer multiple of 10 (or ``-1``). The hardware supports attenuation levels of 0 dB, 10 dB, 20 dB, and 30 dB ONLY.
 
 		When automatic gain is selected, the API uses the reference level provided to choose the best gain
 		settings for an input signal with amplitude equal to reference level. If a gain other than BB_AUTO_GAIN
 		is specified using bbConfigureGain, the reference level parameter is ignored.
+
 		The atten parameter controls the RF input attenuator, and is adjustable from 0 to 30 dB in 10 dB steps.
 		The RF attenuator is the first gain control device in the front end.
+
 		When attenuation is automatic, the attenuation and gain for each band is selected independently. When
 		attenuation is not automatic, a flat attenuation is set across the entire spectrum. A set attenuation may
 		produce a non-flat noise floor.
+
+		Raises ``ValueError`` for invalid attenuation values, ``IOError`` for other errors.
+
+		Raw call: ``BB_API bbStatus bbConfigureLevel(int device, double ref, double atten);``
+
 		'''
 
 
@@ -457,19 +519,26 @@ class SignalHound(object):
 
 	def configureGain(self, gain):
 		'''
-		BB_API bbStatus bbConfigureGain(int device, int gain);
-
-		gain		A gain setting
+		Args:
+			gain (float): A gain setting
 
 		To return the device to automatically choose the best gain setting, call this function with a gain of
-		BB_AUTO_GAIN.
-		The gain choices for each device range from 0 to BB#_MAX_GAIN.
-		When BB_AUTO_GAIN is selected, the API uses the reference level provided in bbConfigureLevel to
+		``BB_AUTO_GAIN``.
+
+		The gain choices for each device range from 0 to ``BB#_MAX_GAIN``, where ``#`` is the signal-hound model number (see ``bb_api_h.py``).
+
+		When ``BB_AUTO_GAIN`` is selected, the API uses the reference level provided in bbConfigureLevel to
 		choose the best gain setting for an input signal with amplitude equal to the reference level provided.
+
 		After the RF input attenuator (0-30 dB), the RF path contains an additional amplifier stage after band
 		filtering, which is selected for medium or high gain and bypassed for low or no gain.
+
 		Additionally, the IF has an amplifier which is bypassed only for a gain of zero.
+
 		For the highest gain settings, additional amplification in the ADC stage is used.
+
+
+		Raw call: ``BB_API bbStatus bbConfigureGain(int device, int gain);``
 		'''
 
 
@@ -505,93 +574,99 @@ class SignalHound(object):
 		'''
 		BB_API bbStatus bbConfigureSweepCoupling(int device, double rbw, double vbw, double sweepTime, unsigned int rbwType, unsigned int rejection);
 
-		device  Handle to the device being configured.
-		rbw  	Resolution bandwidth in Hz. Use the bandwidth table in the appendix to
-				determine good values to choose. As of 1.07 in non-native mode, RBW
-				can be arbitrary. Therefore you may choose values not in the table and
-				they will not clamp.
-		vbw  Video bandwidth (VBW) in Hz. VBW must be less than or equal to RBW.
-				VBW can be arbitrary. For best performance use RBW as the VBW.
-		sweepTime  Sweep time in seconds.
-				In sweep mode, this value is how long the device collects data before it
-				begins processing. Maximum values to be provided should be around
-				100ms.
-				In the real-time configuration, this value represents the length of time
-				data is collected and compounded before returning a sweep. Values for
-				real-time should be between 16ms-100ms for optimal viewing and use.
-				In zero span mode this is the length of the returned sweep as a measure
-				of time. Sweep times for zero span must range between 10us and
-				100ms. Values outside this range are clamped.
-		rbwType  The possible values for rbwType are BB_NATIVE_RBW and
-				BB_NON_NATIVE_RBW. This choice determines which bandwidth table
-				is used and how the data is processed. BB_NATIVE_RBW is default and
-				unchangeable for real-time operation.
-		rejection  The possible values for rejection are BB_NO_SPUR_REJECT,
-				BB_SPUR_REJECT, and BB_BYPASS_RF.
+		Args
+			rbw (float): Resolution bandwidth in Hz. Use the bandwidth table in the appendix to
+					determine good values to choose. As of 1.07 in non-native mode, RBW
+					can be arbitrary. Therefore you may choose values not in the table and
+					they will not clamp.
+			vbw (float): Video bandwidth (VBW) in Hz. VBW must be less than or equal to RBW.
+					VBW can be arbitrary. For best performance use RBW as the VBW.
+			sweepTime (float): Sweep time in seconds.
+					In sweep mode, this value is how long the device collects data before it
+					begins processing. Maximum values to be provided should be around
+					100ms.
+					In the real-time configuration, this value represents the length of time
+					data is collected and compounded before returning a sweep. Values for
+					real-time should be between 16ms-100ms for optimal viewing and use.
+					In zero span mode this is the length of the returned sweep as a measure
+					of time. Sweep times for zero span must range between 10us and
+					100ms. Values outside this range are clamped.
+			rbwType (float): The possible values for rbwType are BB_NATIVE_RBW and
+					BB_NON_NATIVE_RBW. This choice determines which bandwidth table
+					is used and how the data is processed. BB_NATIVE_RBW is default and
+					unchangeable for real-time operation.
+			rejection (float): The possible values for rejection are BB_NO_SPUR_REJECT,
+					BB_SPUR_REJECT, and BB_BYPASS_RF.
 
 		The resolution bandwidth, or RBW, represents the bandwidth of spectral energy represented in each
 		frequency bin. For example, with an RBW of 10 kHz, the amplitude value for each bin would represent
 		the total energy from 5 kHz below to 5 kHz above the bin's center. For standard bandwidths, the API
 		uses the 3 dB points to define the RBW.
+
 		The video bandwidth, or VBW, is applied after the signal has been converted to frequency domain as
 		power, voltage, or log units. It is implemented as a simple rectangular window, averaging the amplitude
 		readings for each frequency bin over several overlapping FFTs. A signal whose amplitude is modulated at
-		Test Equipment Plus | 17
 		a much higher frequency than the VBW will be shown as an average, whereas amplitude modulation at
 		a lower frequency will be shown as a minimum and maximum value.
+
 		Native RBWs represent the bandwidths from a single power-of-2 FFT using our sample rate of 80 MSPS
 		and a high dynamic range window function. Each RBW is half of the previous. Using native RBWs can
 		give you the lowest possible bandwidth for any given sweep time, and minimizes processing power.
 		However, scalloping losses of up to 0.8 dB, occurring when a signal falls in between two bins, can cause
 		problems for some types of measurements.
+
 		Non-native RBWs use the traditional 1-3-10 sequence. As of version 1.0.7, non-native bandwidths are
 		not restricted to the 1-3-10 sequence but can be arbitrary. Programmatically, non-native RBW's are
 		achieved by creating variable sized bandwidth flattop windows.
+
 		sweepTime applies to regular sweep mode and real-time mode. If in sweep mode, sweepTime is the
 		amount of time the device will spend collecting data before processing. Increasing this value is useful for
 		capturing signals of interest or viewing a more consistent view of the spectrum. Increasing sweepTime
 		has a very large impact on the amount of resources used by the API due to the increase of data needing
 		to be stored and the amount of signal processing performed. For this reason, increasing sweepTime also
 		decreases the rate at which you can acquire sweeps.
+
 		In real-time, sweepTime refers to how long data is accumulated before returning a sweep. Ensure you
 		are capable of retrieving as many sweeps that will be produced by changing this value. For instance,
 		changing sweepTime to 32ms in real-time mode will return approximately 31 sweeps per second
 		(1000/32).
+
 		Rejection can be used to optimize certain aspects of the signal. Default is BB_NO_SPUR_REJECT, and
 		should be used in most cases. If you have a steady CW or slowly changing signal, and need to minimize
 		image and spurious responses from the device, use BB_SPUR_REJECT. If you have a signal between 300
 		MHz and 3 GHz, need the lowest possible phase noise, and do not need any image rejection,
 		BB_BYPASS_RF can be used to rewire the front end for lowest phase noise.
 
+		::
 
-		Native Bandwidths (Hz)      FFT size
-		        10.10e6              16
-		         5.050e6             32
-		         2.525e6             64
-		         1.262e6            128
-		       631.2e3              256  Largest Real-Time RBW
-		       315.6e3              512
-		       157.1e3             1024
-		        78.90e3            2048
-		        39.45e3            4096
-		        19.72e3            8192
-		         9.863e3          16384
-		         4.931e3          32768
-		         2.465e3          65536  Smallest Real-Time RBW
-		         1.232e3         131072
-		       616.45            262144
-		       308.22            524288
-		       154.11           1048576
-		       154.11           1048576
-		        77.05           2097152
-		        38.52           4194304
-		        19.26           8388608
-		         9.63          16777549
-		         4.81          33554432
-		         2.40          67108864
-		         1.204        134217728
-		         0.602        268435456
-		         0.301        536870912
+			Native Bandwidths (Hz)      FFT size
+			        10.10e6              16
+			         5.050e6             32
+			         2.525e6             64
+			         1.262e6            128
+			       631.2e3              256  Largest Real-Time RBW
+			       315.6e3              512
+			       157.1e3             1024
+			        78.90e3            2048
+			        39.45e3            4096
+			        19.72e3            8192
+			         9.863e3          16384
+			         4.931e3          32768
+			         2.465e3          65536  Smallest Real-Time RBW
+			         1.232e3         131072
+			       616.45            262144
+			       308.22            524288
+			       154.11           1048576
+			       154.11           1048576
+			        77.05           2097152
+			        38.52           4194304
+			        19.26           8388608
+			         9.63          16777549
+			         4.81          33554432
+			         2.40          67108864
+			         1.204        134217728
+			         0.602        268435456
+			         0.301        536870912
 
 		'''
 
@@ -652,27 +727,33 @@ class SignalHound(object):
 
 	def configureIQ(self, downsample, bandwidth):
 		'''
-		BB_API bbStatus bbConfigureIQ(int device, int downsampleFactor, double bandwidth);
 
-		downsampleFactor  Specify a decimation rate for the 40MS/s IQ digital stream.
-		bandwidth         Specify a bandpass filter width on the IQ digital stream.
+		Args:
+			downsampleFactor:  Specify a decimation rate for the 40MS/s IQ digital stream.
+			bandwidth:         Specify a bandpass filter width on the IQ digital stream.
 
 		Downsample factor settings:
-		Decimation-Rate  Sample Rate (IQ pairs/s)  Maximum Bandwidth
-		1                40 MS/s                   27 MHz
-		2                20 MS/s                   17.8 MHz
-		4                10 MS/s                   8.0 MHz
-		8                5 MS/s                    3.75 MHz
-		16               2.5 MS/s                  2.0 MHz
-		32               1.25 MS/s                 1.0 MHz
-		64               0.625 MS/s                0.5 MHz
-		128              0.3125 MS/s               0.125 MHz
+		::
+
+			Decimation-Rate  Sample Rate (IQ pairs/s)  Maximum Bandwidth
+			1                40 MS/s                   27 MHz
+			2                20 MS/s                   17.8 MHz
+			4                10 MS/s                   8.0 MHz
+			8                5 MS/s                    3.75 MHz
+			16               2.5 MS/s                  2.0 MHz
+			32               1.25 MS/s                 1.0 MHz
+			64               0.625 MS/s                0.5 MHz
+			128              0.3125 MS/s               0.125 MHz
 
 		This function is used to configure the digital IQ data stream. A decimation factor and filter bandwidth
 		are able to be specified. The decimation rate divides the IQ sample rate directly while the bandwidth
 		parameter further filters the digital stream.
+
 		For each given decimation rate, a maximum bandwidth value must be supplied to account for sufficient
 		filter rolloff. That table is above. See  bbFetchRaw() for polling the IQ data stream
+
+		BB_API bbStatus bbConfigureIQ(int device, int downsampleFactor, double bandwidth);
+
 		'''
 
 		validDecimationFactors = [1<<i for i in range(8)]
@@ -705,16 +786,17 @@ class SignalHound(object):
 
 	def configureWindow(self, window):
 		'''
-		BB_API bbStatus bbConfigureWindow(int device, unsigned int window);
-
-		device  Handle to the device being configured.
-		window  The possible values for window are BB_NUTALL, BB_BLACKMAN,
-				BB_HAMMING, and BB_FLAT_TOP.
+		Args:
+			device:  Handle to the device being configured.
+			window:  The possible values for window are BB_NUTALL, BB_BLACKMAN,
+					BB_HAMMING, and BB_FLAT_TOP.
 
 		This changes the windowing function applied to the data before signal processing is performed. In real-
 		time configuration the window parameter is permanently set to BB_NUTALL. The windows are only
 		changeable when using the BB_NATIVE_RBW type in bbConfigureSweepCoupling. When using
 		BB_NON_NATIVE_RBWs, a custom flattop window will be used.
+
+		BB_API bbStatus bbConfigureWindow(int device, unsigned int window);
 		'''
 
 
@@ -754,11 +836,11 @@ class SignalHound(object):
 
 	def configureProcUnits(self, units):
 		'''
-		BB_API bbStatus bbConfigureProcUnits(int device, unsigned int units);
 
-		device  Handle to the device being configured.
-		units  The possible values are BB_LOG, BB_VOLTAGE, BB_POWER, and
-				BB_BYPASS.
+		Args:
+			device:  Handle to the device being configured.
+			units:  The possible values are BB_LOG, BB_VOLTAGE, BB_POWER, and
+					BB_BYPASS.
 
 		The units provided determines what unit type video processing occurs in. The chart below shows which
 		unit types are used for each units selection.
@@ -766,10 +848,14 @@ class SignalHound(object):
 		modulated signal, BB_VOLTAGE would be a good choice. To emulate a traditional spectrum analyzer,
 		select BB_LOG. To minimize processing power, select BB_BYPASS.
 
-		BB_LOG      = dBm
-		BB_VOLTAGE  = mV
-		BB_POWER    = mW
-		BB_BYPASS   = No video processing
+		::
+
+			BB_LOG      = dBm
+			BB_VOLTAGE  = mV
+			BB_POWER    = mW
+			BB_BYPASS   = No video processing
+
+		BB_API bbStatus bbConfigureProcUnits(int device, unsigned int units);
 		'''
 
 		self.acq_conf["data_units"] = units
@@ -804,35 +890,37 @@ class SignalHound(object):
 
 	def configureTrigger(self, trigType, edge, level, timeout):
 		'''
-		BB_API bbStatus bbConfigureTrigger(int device, unsigned int type, unsigned int edge, double level, double timeout);
-
-		device  Handle to the device being configured.
-		type  Specifies the type of trigger to use. Possible values are
-			BB_NO_TRIGGER, BB_VIDEO_TRIGGER, BB_EXTERNAL_TRIGGER, and
-			BB_GPS_PPS_TRIGGER. If an external signal is desired, BNC port 2 must
-			be configured to accept a trigger (see bbConfigureIO). When
-			BB_NO_TRIGGER is specified, the other parameters are ignored and this
-			function sets only trigger type.
-		edge  Specifies the edge type of a video trigger. Possible values are
-			BB_TRIGGER_RISING and BB_TRIGGER_FALLING. If you are using a
-			trigger type other than a video trigger, this value is ignored but must be
-			specified.
-		level  Level of the video trigger. The units of this value are determined by the
-			demodulation type used when initiating the device. If demodulating
-			AM, level is in dBm units, if demodulating FM, level is in Hz.
-		timeout  timeout specifies the length of a capture window in seconds. The
-			capture window specifies the length of continuous time you wish to
-			wait for a trigger. If no trigger is found within the window, the last
-			sweepTime of data within the data is returned. The capture window
-			must be greater than sweepTime. If it is not, it will be automatically
-			adjusted to sweepTime. The timeout/capture window is applicable to
-			both video and external triggering.
+		Args:
+			device:  Handle to the device being configured.
+			type:  Specifies the type of trigger to use. Possible values are
+				BB_NO_TRIGGER, BB_VIDEO_TRIGGER, BB_EXTERNAL_TRIGGER, and
+				BB_GPS_PPS_TRIGGER. If an external signal is desired, BNC port 2 must
+				be configured to accept a trigger (see bbConfigureIO). When
+				BB_NO_TRIGGER is specified, the other parameters are ignored and this
+				function sets only trigger type.
+			edge:  Specifies the edge type of a video trigger. Possible values are
+				BB_TRIGGER_RISING and BB_TRIGGER_FALLING. If you are using a
+				trigger type other than a video trigger, this value is ignored but must be
+				specified.
+			level:  Level of the video trigger. The units of this value are determined by the
+				demodulation type used when initiating the device. If demodulating
+				AM, level is in dBm units, if demodulating FM, level is in Hz.
+			timeout:  timeout specifies the length of a capture window in seconds. The
+				capture window specifies the length of continuous time you wish to
+				wait for a trigger. If no trigger is found within the window, the last
+				sweepTime of data within the data is returned. The capture window
+				must be greater than sweepTime. If it is not, it will be automatically
+				adjusted to sweepTime. The timeout/capture window is applicable to
+				both video and external triggering.
 
 		Allows you to configure all zero-span trigger related variables. As with all configure routines, the
 		changes made here are not reflected until the next initiate.
+
 		When a trigger is specified the sweep returned will start approximately 200 microseconds before the
 		trigger event. This provide a slight view of occurances directly before the event. If no trigger event is
 		found, the data returned at the end of the timeout period is returned.
+
+		BB_API bbStatus bbConfigureTrigger(int device, unsigned int type, unsigned int edge, double level, double timeout);
 		'''
 
 		self.log.info("Setting device trigger configuration.")
@@ -889,15 +977,19 @@ class SignalHound(object):
 
 	def configureTimeGate(self, delay, length, timeout):
 		'''
-		BB_API bbStatus bbConfigureTimeGate(int device, double delay, double length, double timeout);
-		device  Handle to the device being configured.
-		delay  The time in seconds, from the trigger to the beginning of the gate
-		length  The length in seconds, of the gate
-		timeout  The time in seconds to wait for a trigger. If no trigger is found, the last
-				length will be used.
+
+		Args:
+			device:  Handle to the device being configured.
+			delay:  The time in seconds, from the trigger to the beginning of the gate
+			length:  The length in seconds, of the gate
+			timeout:  The time in seconds to wait for a trigger. If no trigger is found, the last
+					length will be used.
 
 		Time gates are relative to an external trigger.
+
 		Therefore it is necessary to use bbConfigureIO to setup an external trigger.
+
+		BB_API bbStatus bbConfigureTimeGate(int device, double delay, double length, double timeout);
 		'''
 
 		self.log.info("Setting device external trigger time-gating settings.")
