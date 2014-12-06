@@ -38,6 +38,8 @@ well as install the SignalHound wrapper.
 
 ---
 
+[API Docs (Sphinx autodocs)](http://fake-name.github.io/pySignalHound/html/)
+
 The primary API contained in the `SignalHound/__init__.py` file.
 
 `bb_api_h.py` is a transliteration of the bb_api.h file from the C api, and 
