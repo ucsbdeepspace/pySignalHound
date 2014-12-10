@@ -38,6 +38,8 @@ import os.path
 
 class SignalHound(object):
 
+
+	#: C Call return value -> integer return code mapping
 	bbStatus = {
 		"bbInvalidModeErr"             : -112,
 		"bbReferenceLevelErr"          : -111,
@@ -78,10 +80,13 @@ class SignalHound(object):
 		"bbNoTriggerFound"             : 3
 	}
 
-	rawDataArrSize = 299008
-	rawSweepTriggerArraySize = 68
+	#: C Array size for raw sweep requests
+	_rawDataArrSize = 299008
 
-	devType = None
+	#: Raw sweep trigger C array size
+	_rawSweepTriggerArraySize = 68
+
+	__devType = None
 
 	def __init__(self):
 
@@ -186,7 +191,7 @@ class SignalHound(object):
 
 		self.devOpen = True
 
-		self.devType = self.getDeviceType()
+		self._devType = self.getDeviceType()
 
 		self.log.info("Opened Device with handle num: %s", self.deviceHandle.value)
 
@@ -321,7 +326,7 @@ class SignalHound(object):
 			raise IOError("Unknown error!")
 
 		# The raw data array returned by fetchRaw when in streaming mode is the value of return_len * 2 (since each value is two floats)
-		self.rawDataArrSize = return_len.value * 2
+		self._rawDataArrSize = return_len.value * 2
 
 		values = {
 			"return_len"      : return_len.value,
@@ -572,7 +577,6 @@ class SignalHound(object):
 
 	def configureSweepCoupling(self, rbw, vbw, sweepTime, rbwType, rejection):
 		'''
-		BB_API bbStatus bbConfigureSweepCoupling(int device, double rbw, double vbw, double sweepTime, unsigned int rbwType, unsigned int rejection);
 
 		Args
 			rbw (float): Resolution bandwidth in Hz. Use the bandwidth table in the appendix to
@@ -668,6 +672,7 @@ class SignalHound(object):
 			         0.602        268435456
 			         0.301        536870912
 
+		Raw Call: ``BB_API bbStatus bbConfigureSweepCoupling(int device, double rbw, double vbw, double sweepTime, unsigned int rbwType, unsigned int rejection);``
 		'''
 
 
@@ -752,7 +757,7 @@ class SignalHound(object):
 		For each given decimation rate, a maximum bandwidth value must be supplied to account for sufficient
 		filter rolloff. That table is above. See  bbFetchRaw() for polling the IQ data stream
 
-		BB_API bbStatus bbConfigureIQ(int device, int downsampleFactor, double bandwidth);
+		Raw Call: ``BB_API bbStatus bbConfigureIQ(int device, int downsampleFactor, double bandwidth);``
 
 		'''
 
@@ -787,7 +792,6 @@ class SignalHound(object):
 	def configureWindow(self, window):
 		'''
 		Args:
-			device:  Handle to the device being configured.
 			window:  The possible values for window are BB_NUTALL, BB_BLACKMAN,
 					BB_HAMMING, and BB_FLAT_TOP.
 
@@ -796,7 +800,7 @@ class SignalHound(object):
 		changeable when using the BB_NATIVE_RBW type in bbConfigureSweepCoupling. When using
 		BB_NON_NATIVE_RBWs, a custom flattop window will be used.
 
-		BB_API bbStatus bbConfigureWindow(int device, unsigned int window);
+		Raw Call: ``BB_API bbStatus bbConfigureWindow(int device, unsigned int window);``
 		'''
 
 
@@ -838,7 +842,6 @@ class SignalHound(object):
 		'''
 
 		Args:
-			device:  Handle to the device being configured.
 			units:  The possible values are BB_LOG, BB_VOLTAGE, BB_POWER, and
 					BB_BYPASS.
 
@@ -855,7 +858,7 @@ class SignalHound(object):
 			BB_POWER    = mW
 			BB_BYPASS   = No video processing
 
-		BB_API bbStatus bbConfigureProcUnits(int device, unsigned int units);
+		Raw Call: ``BB_API bbStatus bbConfigureProcUnits(int device, unsigned int units);``
 		'''
 
 		self.acq_conf["data_units"] = units
@@ -891,7 +894,6 @@ class SignalHound(object):
 	def configureTrigger(self, trigType, edge, level, timeout):
 		'''
 		Args:
-			device:  Handle to the device being configured.
 			type:  Specifies the type of trigger to use. Possible values are
 				BB_NO_TRIGGER, BB_VIDEO_TRIGGER, BB_EXTERNAL_TRIGGER, and
 				BB_GPS_PPS_TRIGGER. If an external signal is desired, BNC port 2 must
@@ -920,7 +922,7 @@ class SignalHound(object):
 		trigger event. This provide a slight view of occurances directly before the event. If no trigger event is
 		found, the data returned at the end of the timeout period is returned.
 
-		BB_API bbStatus bbConfigureTrigger(int device, unsigned int type, unsigned int edge, double level, double timeout);
+		Raw Call: ``BB_API bbStatus bbConfigureTrigger(int device, unsigned int type, unsigned int edge, double level, double timeout);``
 		'''
 
 		self.log.info("Setting device trigger configuration.")
@@ -979,7 +981,6 @@ class SignalHound(object):
 		'''
 
 		Args:
-			device:  Handle to the device being configured.
 			delay:  The time in seconds, from the trigger to the beginning of the gate
 			length:  The length in seconds, of the gate
 			timeout:  The time in seconds to wait for a trigger. If no trigger is found, the last
@@ -989,7 +990,7 @@ class SignalHound(object):
 
 		Therefore it is necessary to use bbConfigureIO to setup an external trigger.
 
-		BB_API bbStatus bbConfigureTimeGate(int device, double delay, double length, double timeout);
+		Raw Call: ``BB_API bbStatus bbConfigureTimeGate(int device, double delay, double length, double timeout);``
 		'''
 
 		self.log.info("Setting device external trigger time-gating settings.")
@@ -1013,15 +1014,16 @@ class SignalHound(object):
 
 	def configureRawSweep(self, start, ppf, steps):
 		'''
-		BB_API bbStatus bbConfigureRawSweep(int device, int start, int ppf, int steps, int stepsize);
-		device  Handle to the device being configured.
-		start  Frequency value in MHz representing the center of the first 20MHz step
-			in the sweep. Must be a multiple of 20, and no less than 20.
-		ppf  Controls the amount of digital samples to collect at each frequency
-			step. The number of digital samples collected at each frequency equals
-			18688 * ppf.
-		steps  Number of steps to take starting with and including the first steps.
-		stepsize  Value must be BB_TWENTY_MHZ
+		Raw Call: ``BB_API bbStatus bbConfigureRawSweep(int device, int start, int ppf, int steps, int stepsize);``
+
+		Args:
+			start:  Frequency value in MHz representing the center of the first 20MHz step
+				in the sweep. Must be a multiple of 20, and no less than 20.
+			ppf:  Controls the amount of digital samples to collect at each frequency
+				step. The number of digital samples collected at each frequency equals
+				18688 * ppf.
+			steps:  Number of steps to take starting with and including the first steps.
+			stepsize:  Value must be BB_TWENTY_MHZ
 
 		This function configures the device for both BB_RAW_SWEEP and BB_RAW_SWEEP_LOOP modes. This
 		function allows you to configure the sweep start frequency, the number of 20 MHz steps to take across
@@ -1061,42 +1063,46 @@ class SignalHound(object):
 
 	def configureIO(self, port1Coupling, port1mode, port2mode):
 		'''
-		BB_API bbStatus bbConfigureIO(int device, unsigned int port1, unsigned int port2);
-		device  Handle to the device being configured.
-		port1  The first BNC port may be used to input or output a 10 MHz time base
-			(AC or DC coupled), or to generate a general purpose logic high/low
-			output. Please refer to the example below. All possible values for this
-			port are found in the header file and are prefixed with “BB_PORT1”
-		port2  Port 2 is capable of accepting an external trigger or generating a logic
-			output. Port 2 is always DC coupled. All possible values for this port are
-			found in the header file and are prefixed with “BB_PORT2.”
+
+		Args:
+			port1:  The first BNC port may be used to input or output a 10 MHz time base
+				(AC or DC coupled), or to generate a general purpose logic high/low
+				output. Please refer to the example below. All possible values for this
+				port are found in the header file and are prefixed with “BB_PORT1”
+			port2:  Port 2 is capable of accepting an external trigger or generating a logic
+				output. Port 2 is always DC coupled. All possible values for this port are
+				found in the header file and are prefixed with “BB_PORT2.”
 
 		NOTE: This function can only be called when the device is idle (not operating in any mode). To ensure
 		the device is idle, call bbAbort().
+
 		There are two configurable BNC connector ports available on the device. Both ports functionality are
 		changed with this function. For both ports, ‘0’ is the default and can be supplied through this function to
 		return the ports to their default values. Specifying a ‘0’ on port 1 returns the device to an internal time
 		base and outputs the time base AC coupled. Specifying ‘0’ on port 2 emits a DC coupled logic low.
-		For external 10 MHz timebases, best phase noise is achieved by using a low jitter 3.3V CMOS input.
-		Configure combinations
 
+		For external 10 MHz timebases, best phase noise is achieved by using a low jitter 3.3V CMOS input.
+
+		Configure combinations
 
 		Port 1 IO  For port 1 only a coupled value must be ‘OR’ed
 		together with a port type. Use the ‘|’ operator to
 		combine a coupled type and a port type.
 
-		BB_PORT1_AC_COUPLED               Denotes an AC coupled port
-		BB_PORT1_DC_COUPLED               Denotes a DC coupled port
-		BB_PORT1_INT_REF_OUT              Output the internal 10 MHz timebase
-		BB_PORT1_EXT_REF_IN               Accept an external 10MHz time base
-		BB_PORT1_OUT_LOGIC_LOW            Self-explanitory
-		BB_PORT1_OUT_LOGIC_HIGH           Self-explanitory
+		 - ``BB_PORT1_AC_COUPLED``               Denotes an AC coupled port
+		 - ``BB_PORT1_DC_COUPLED``               Denotes a DC coupled port
+		 - ``BB_PORT1_INT_REF_OUT``              Output the internal 10 MHz timebase
+		 - ``BB_PORT1_EXT_REF_IN``               Accept an external 10MHz time base
+		 - ``BB_PORT1_OUT_LOGIC_LOW``            Self-explanitory
+		 - ``BB_PORT1_OUT_LOGIC_HIGH``           Self-explanitory
 
 		Port 2 IO
-		BB_PORT2_OUT_LOGIC_LOW            Self-explanitory
-		BB_PORT2_OUT_LOGIC_HIGH           Self-explanitory
-		BB_PORT2_IN_TRIGGER_RISING_EDGE   When set, the device is notified of a rising edge
-		BB_PORT_IN_TRIGGER_FALLING_EDGE   When set, the device is notified of a falling edge
+		 - ``BB_PORT2_OUT_LOGIC_LOW``            Self-explanitory
+		 - ``BB_PORT2_OUT_LOGIC_HIGH``           Self-explanitory
+		 - ``BB_PORT2_IN_TRIGGER_RISING_EDGE``   When set, the device is notified of a rising edge
+		 - ``BB_PORT_IN_TRIGGER_FALLING_EDGE``   When set, the device is notified of a falling edge
+
+		Raw Call: ``BB_API bbStatus bbConfigureIO(int device, unsigned int port1, unsigned int port2);``
 		'''
 
 		self.log.info("Setting device IO Configuration.")
@@ -1160,21 +1166,21 @@ class SignalHound(object):
 
 	def configureDemod(self, modulationType, freq, ifBw, audioLowPassFreq, audioHighPassFreq, fmDeemphasis):
 		'''
-		BB_API bbStatus bbConfigureDemod(int device, int modulationType, double freq, float IFBW, float audioLowPassFreq, float audioHighPassFreq, float FMDeemphasis);
-
-		device  Handle to the device being configured.
-		modulationType  Specifies the demodulation scheme, possible values are
-				BB_DEMOD_AM/FM/Upper sideband (USB)/Lower Sideband (LSB)/CW.
-		freq  Center frequency. For best results, re-initiate the device if the center frequency changes +/- 8MHz from the initial value.
-		IFBW  Intermediate frequency bandwidth centered on freq. Filter takes place
-				before demodulation. Specified in Hz. Should be between 2kHz and 500kHz.
-		audioLowPassFreq  Post demodulation filter in Hz. Should be between 1kHz and 12kHz Hz.
-		audioHighPassFreq  Post demodulation filter in Hz. Should be between 20 and 1000Hz.
-		FMDeemphasis  Specified in micro-seconds. Should be between 1 and 100.
+		Args:
+			modulationType:  Specifies the demodulation scheme, possible values are
+					BB_DEMOD_AM/FM/Upper sideband (USB)/Lower Sideband (LSB)/CW.
+			freq:  Center frequency. For best results, re-initiate the device if the center frequency changes +/- 8MHz from the initial value.
+			IFBW:  Intermediate frequency bandwidth centered on freq. Filter takes place
+					before demodulation. Specified in Hz. Should be between 2kHz and 500kHz.
+			audioLowPassFreq:  Post demodulation filter in Hz. Should be between 1kHz and 12kHz Hz.
+			audioHighPassFreq:  Post demodulation filter in Hz. Should be between 20 and 1000Hz.
+			FMDeemphasis:  Specified in micro-seconds. Should be between 1 and 100.
 
 		This function can be called while the device is active.
 		Note : If any of the boundary conditions are not met, this function will return with no error but the
 		values will be clamped to its boundary values
+
+		Raw Call: ``BB_API bbStatus bbConfigureDemod(int device, int modulationType, double freq, float IFBW, float audioLowPassFreq, float audioHighPassFreq, float FMDeemphasis);``
 		'''
 
 		self.log.info("Setting device demodulator Configuration.")
@@ -1225,26 +1231,28 @@ class SignalHound(object):
 
 	def initiate(self, mode, flag, gps_timestamp=False):
 		'''
-		BB_API bbStatus bbInitiate(int device, unsigned int mode, unsigned int flag);
-
-		device  Handle to the device being configured.
-		mode  The possible values for mode are BB_SWEEPING, BB_REAL_TIME,
-			BB_ZERO_SPAN, BB_TIME_GATE, BB_RAW_SWEEP,
-			BB_RAW_SWEEP_LOOP and BB_AUDIO_DEMOD.
-		flag  The default value is zero.
-			If mode equals BB_ZERO_SPAN, flag can be used to denote the type of
-			modulation performed on the incoming signal. BB_DEMOD_AM and
-			BB_DEMOD_FM are the two options.
-			Flag can be used to inform the API to time
-			stamp data using an external GPS reciever. Mask the bandwidth flag (‘|’
-			in C) with BB_TIME_STAMP to achieve this. See Appendix:Using a GPS
-			Receiver to Time-Stamp Data for information on how to set this up.
+		Args:
+			mode:  The possible values for mode are BB_SWEEPING, BB_REAL_TIME,
+				BB_ZERO_SPAN, BB_TIME_GATE, BB_RAW_SWEEP,
+				BB_RAW_SWEEP_LOOP and BB_AUDIO_DEMOD.
+			flag:  The default value is zero.
+				If mode equals BB_ZERO_SPAN, flag can be used to denote the type of
+				modulation performed on the incoming signal. BB_DEMOD_AM and
+				BB_DEMOD_FM are the two options.
+				Flag can be used to inform the API to time
+				stamp data using an external GPS reciever. Mask the bandwidth flag (‘|’
+				in C) with BB_TIME_STAMP to achieve this. See Appendix:Using a GPS
+				Receiver to Time-Stamp Data for information on how to set this up.
+			gps_timestamp (bool): Timestamp using GPS
 
 		bbInitiate configures the device into a state determined by the mode parameter. For more information
 		regarding operating states, refer to the Theory of Operation and Modes of Operation sections. This
 		function calls bbAbort before attempting to reconfigure. It should be noted, if an error is returned, any
 		past operating state will no longer be active.
+
 		Pay special attention to the bbInvalidParameterErr description below
+
+		Raw Call: ``BB_API bbStatus bbInitiate(int device, unsigned int mode, unsigned int flag);``
 		'''
 
 		self.acq_conf["acq_mode"] = mode
@@ -1296,13 +1304,13 @@ class SignalHound(object):
 			elif (self.acq_conf["span_freq"] > hf.BB60C_MAX_RT_SPAN or
 				self.acq_conf["span_freq"] < hf.BB_MIN_RT_SPAN ):
 
-				if not self.devType:
+				if not self._devType:
 					raise ValueError("Device type not detected? How did this even occur!")
-				elif self.devType == "BB60C":
+				elif self._devType == "BB60C":
 					if self.acq_conf["span_freq"] > hf.BB60C_MAX_RT_SPAN:
 						raise ValueError("Real-time mode maximum span frequency is 27 Mhz for the BB60C. Specified span frequency = %f" % self.acq_conf["span_freq"])
 
-				elif self.devType == "BB60A":
+				elif self._devType == "BB60A":
 					if self.acq_conf["span_freq"] > hf.BB60A_MAX_RT_SPAN:
 						raise ValueError("Real-time mode maximum span frequency is 20 Mhz for the BB60A. Specified span frequency = %f" % self.acq_conf["span_freq"])
 
@@ -1347,18 +1355,17 @@ class SignalHound(object):
 
 	def fetchTrace(self):
 		'''
-		BB_API bbStatus bbFetchTrace(int device, int arraySize, double *min, double *max);
-		device  Handle of an initialized device.
-		arraySize  A provided arraySize. This value must be equal to or greater than the
-		traceSize value returned from bbQueryTraceInfo.
-				min  Pointer to a double buffer, whose length is equal to or greater than
-		traceSize returned from bbQueryTraceInfo.
-				max  Pointer to a double buffer, whose length is equal to or greater than
-		traceSize returned from bbQueryTraceInfo.
+		Args:
+			None
+
+		Returns:
+			dictionary containing the ``min`` and ``max`` arrays with eponymous keys.
 
 		Returns a minimum and maximum array of values relating to the current mode of operation. If the
-		detectorType provided in bbConfigureAcquisition is BB_AVERAGE, the array will be populated with the
-		same values. Element zero of each array corresponds to the startFreq returned from bbQueryTraceInfo.
+		detectorType provided in bbConfigureAcquisition is BB_AVERAGE, the arrays will contain identical
+		values. Element zero of each array corresponds to the startFreq returned from bbQueryTraceInfo.
+
+		Raw Call: ``BB_API bbStatus bbFetchTrace(int device, int arraySize, double *min, double *max);``
 		'''
 
 		try:
@@ -1426,16 +1433,16 @@ class SignalHound(object):
 
 	def fetchAudio(self):
 		'''
-		BB_API bbStatus bbFetchAudio(int device, float *audio);
-
-		device  Handle of an initialized device.
-		audio  Pointer to an array of 4096 32-bit floating point values
+		Returns:
+			Numpy array of 4096 32-bit floating point values
 
 		If the device is initiated and running in the audio demodulation mode, the function is a blocking call
 		which returns the next 4096 audio samples. The approximate blocking time for this function is 128 ms if
 		called again immediately after returning. There is no internal buffering of audio, meaning the audio will
 		be overwritten if this function is not called in a timely fashion. The audio values are typically -1.0 to 1.0,
 		representing full-scale audio. In FM mode, the audio values will scale with a change in IF bandwidth.
+
+		Raw Call: ``BB_API bbStatus bbFetchAudio(int device, float *audio);``
 		'''
 
 		arraySize = 4096
@@ -1464,12 +1471,12 @@ class SignalHound(object):
 
 	def fetchRawCorrections(self):
 		'''
-		BB_API bbStatus bbFetchRawCorrections(int device, float *corrections, int *index, double *startFreq);
 
-		device        Handle of an initialized device.
-		corrections   32-bit float array of length 2048. Correction values are decibel.
-		index         Index into the corrections array where the correction data begins.
-		startFreq      Frequency associated with the correction at index.
+		Returns:
+			| ``dict`` containing:
+			|	 - ``corrections``   32-bit float array of length 2048. Correction values are decibel.
+			|	 - ``index``         Index into the corrections array where the correction data begins.
+			|	 - ``startFreq``      Frequency associated with the correction at index.
 
 		When this function returns successfully, the correction array will contain the frequency domain
 		correction constants for the given bandwidth chosen. The corrections are modified based on
@@ -1483,6 +1490,7 @@ class SignalHound(object):
 		startFreq. The bin size of each index is implied through 40 MHz divided by the length of the array,
 		(40.0e6 / 2048) = 19531.25 Hz. If an Fourier transform is applied on the IF data, the correction values
 		will line up with the usable 20 MHz bandwdith.
+
 		7MHz
 		The correction array represents 10 Mhz of bandwdith where the usable 7 MHz is centered and all values
 		outside the usable 7 MHz is zeroed. The index returned is the first non zero sample in the array. The
@@ -1490,12 +1498,15 @@ class SignalHound(object):
 		frequency can be determined with the bin size. The bin size for this array is (10.0e6 / 2048) = 4882.8125
 		Hz. If a complex Fourier Transform is applied to the IQ data, the correction values will line up with the
 		usable 7 MHz bandwidth.
-		Tips
+
+		##Tips
+
 		Time domain corrections of the signal’s amplitude require two steps. First, an inverse Fourier Transform
 		must be performed on the entire correction array (including zero’ed portions). This results in a 4096
 		sample kernel. Second, the kernel is used in convolution with the time domain data. If a larger/smaller
 		kernel is desired, interpolate/extrapolate the correction array while it is in the frequency domain to the
 		desired length. Lengths which are powers of two are suggested.
+
 		Frequency domain correction of the signal’s amplitude requires you to first transform the raw data into
 		the frequency domain. Performing an Fourier transform on the incoming data will yeild a frequency
 		domain array that will align with the correction array. You can index the Transform results using the
@@ -1503,6 +1514,8 @@ class SignalHound(object):
 		are in dB. If larger Transform sizes are desired, you can interpolate the correction array to the desired
 		size. (Be aware! This will change the index of the first non-zero correction, but the results of the FFT will
 		still align the with usable 20 MHz)
+
+		Raw Call: ``BB_API bbStatus bbFetchRawCorrections(int device, float *corrections, int *index, double *startFreq);``
 		'''
 
 		arraySize = 2048
@@ -1539,31 +1552,34 @@ class SignalHound(object):
 
 	@classmethod
 	def getRawSweep_size(cls):
-		return ct.c_float, cls.rawDataArrSize
+		return ct.c_float, cls._rawDataArrSize
 
 	@classmethod
 	def getRawSweep_s_size(cls):
-		return ct.c_short, cls.rawDataArrSize
+		return ct.c_short, cls._rawDataArrSize
 
 	@classmethod
 	def getRawSweepTrig_size(cls):
-		return ct.c_int, cls.rawSweepTriggerArraySize
+		return ct.c_int, cls._rawSweepTriggerArraySize
 
 
 
 
 	def fetchRawSweep(self):
 		'''
-		BB_API bbStatus bbFetchRawSweep(int device, short *buffer);
-
-		device  Handle of an initialized device.
-		buffer  Pointer to an array of signed short integers
+		returns:
+			Numpy array of signed short integers
 
 		This function is used to collect a single sweep for a device configured in raw sweep mode. The length of
 		the buffer provided is determined by the settings used to configure the device for raw sweep mode. This
 		length can be determined using the equation.
-				Buffer-Length = 18688 * ppf * steps
+
+		Buffer-Length = 18688 * ppf * steps
+
 		If the function returns successfully the array will contain a full sweep. The shorts will
+
+
+		Raw Call: ``BB_API bbStatus bbFetchRawSweep(int device, short *buffer);``
 		'''
 
 		try:
@@ -1602,19 +1618,23 @@ class SignalHound(object):
 
 	def startRawSweepLoop(self, callbackFunc):
 		'''
-		BB_API bbStatus bbStartRawSweepLoop(int device, void(*sweep_callback)(short *buffer, int len));
-
-		device  Handle of an initialized device.
-		sweep_callback  Pointer to a C function. Used as a callback to notify the user of
+		Args:
+			callbackFunc: Python function. Used as a callback to notify the user of
 				completed sweeps.
 
 		This function can be called after being configured and initiated in RAW_SWEEP_LOOP mode. The device
 		begins sweeping on the first call to this function after the device has been initiated. It is possible to call
 		this function multiple times per initiate to change the function call back used.
+
 		If this function returns successfully, the device begins sweeping immediately. The function provided is
 		set as the callback function used when a sweep is completed. sweep_callback is called once per sweep
-		completion. The function passes two parameters, a pointer to the buffer of data for the sweep, and the
-		length of the buffer.
+		completion. The function is passed two parameters, a pointer to the buffer of data for the sweep, and the
+		length of the buffer, both ``ctypes`` variables: ``(bufPtr, bufLen)``.
+
+		To properly decode the passed parameters, you should use the ``SignalHound.decodeRawSweep`` staticmethod.
+		This takes the two ctypes arguments in the order they are passed to the callback function, and returns
+		a python numpy array.
+
 		The data buffer will not be overwritten when in the function body of sweep_callback. The API will
 		maintain a circular list of buffers to store sweeps in. The API will store up to ¼ to ½ seconds worth of
 		sweeps depending on parameters. If the function body of sweep_callback exceeds this amount of time,
@@ -1622,14 +1642,19 @@ class SignalHound(object):
 		will cause a loss of data. It is recommended the function body of sweep_callback is short, preferably
 		simply copying the data from buffer into your own data structure. This ensures you receive every sweep
 		and make your own decisions on when to drop/ignore sweeps.
+
 		The sweep_callback function is not called in the main thread of execution. It is called once per sweep,
 		which can result in the function being called anywhere from 3-250 milliseconds. It is the responsibility of
 		the user to not index the buffer out of range. The buffer contents can be modified by the user only
 		during the function body of sweep_callback, once the function returns, the API is free to overwrite the
 		contents. Modifying the contents of the buffer not in the function body of sweep_callback is undefined.
+
 		The user should not attempt to manage any of the memory provided through the buffer pointers.
+
 		The device sweeps indefinitely until bbAbort or bbCloseDevice is called. When operation is suspended
 		via bbAbort, the device must be reconfigured and initiated again before calling this function.
+
+		Raw Call: ``BB_API bbStatus bbStartRawSweepLoop(int device, void(*sweep_callback)(short *buffer, int len));``
 		'''
 
 		if not callable(callbackFunc):
@@ -1654,25 +1679,23 @@ class SignalHound(object):
 
 	def queryTraceInfo(self):
 		'''
-		BB_API bbStatus bbQueryTraceInfo(int device, unsigned int *traceLen, double *binSize, double *start);
-
-		device  Handle of an initialized device.
-		traceLen  A pointer to an unsigned int. If the function returns successfully
-				traceLen will contain the size of arrays returned by bbFetchTrace.
-		binSize  A pointer to a 64bit floating point variable. If the function returns
-				successfully, binSize will contain the frequency difference between two
-				sequential bins in a returned sweep. In Zero-Span mode, binSize refers
-				to the difference between sequential samples in seconds.
-		start  A pointer to a 64bit floating point variable. If the function returns
-				successfully, start will contain the frequency of the first bin in a
-				returned sweep. In Zero-Span mode, start represents the exact center
-				frequency used by the API.
+		Returns:
+			| ``dict`` containing:
+			|	"arr-size": The size of arrays returned by bbFetchTrace.
+			|	"arr-bin-size":  The frequency difference between two
+			|			sequential bins in a returned sweep. In Zero-Span mode, binSize refers
+			|			to the difference between sequential samples in seconds.
+			|	"ret-start-freq":  The frequency of the first bin in a
+			|			returned sweep. In Zero-Span mode, start represents the exact center
+			|			frequency used by the API.
 
 		This function should be called to determine sweep characteristics after a device has been configured
 		and initiated. For zero-span mode, startFreq and binSize will refer to the time domain values. In zero-
 		span mode startFreq will always be zero, and binSize will be equal to sweepTime/traceSize.
 
 		Note: Calling while in BB_RAW_PIPE mode will produce a bbDeviceNotConfiguredErr
+
+		Raw Call: ``BB_API bbStatus bbQueryTraceInfo(int device, unsigned int *traceLen, double *binSize, double *start);``
 		'''
 
 		# self.log.info("Querying device for trace information.")
@@ -1707,14 +1730,15 @@ class SignalHound(object):
 
 	def queryStreamingCenter(self):
 		'''
-		BB_API bbStatus bbQueryStreamingCenter(int device, double *center);
-		device  Handle of an initialized device.
-		center  Pointer to a double which will receive the absolute center frequency of
+		Returns:
+			A Double containing the absolute center frequency of
 				the streaming device.
 
 		The function retrieves the center frequency of the 20 MHz IF bandwidth of a device currently initialized
 		in raw pipe mode. The center returned is representative of ¼ of the IF sample rate. The 20 MHz of usable
 		bandwidth is centered on this frequency.
+
+		Raw Call: ``BB_API bbStatus bbQueryStreamingCenter(int device, double *center);``
 		'''
 
 		self.log.info("Querying device for streaming center-freqency.")
@@ -1742,17 +1766,19 @@ class SignalHound(object):
 
 	def queryTimestamp(self):
 		'''
-		BB_API bbStatus bbQueryTimestamp(int device, unsigned int *seconds, unsigned int *nanoseconds);
 
-		device  Handle of an initialized device.
-		seconds  Seconds since midnight (00:00:00), January 1, 1970, coordinated
-				universal time(UTC).
-		nanoseconds  nanoseconds between seconds and seconds + 1
+		Returns:
+			| Two-Tuple containing (in order):
+			|	seconds  Integer Seconds since midnight (00:00:00), January 1, 1970, coordinated
+			|			universal time(UTC).
+			|	nanoseconds  Integer nanoseconds between seconds and seconds + 1
 
 		This function is used in conjunction with bbSyncCPUtoGPS and a GPS device to retrieve an absolute time
 		for a data packet in raw pipe mode. This function returns an absolute time for the last packet retrieved
 		from bbFetchRaw. See the Appendix:Code Examples for information on how to setup and interpret the
 		time information.
+
+		Raw Call: ``BB_API bbStatus bbQueryTimestamp(int device, unsigned int *seconds, unsigned int *nanoseconds);``
 		'''
 
 		self.log.info("Querying device for timestamp.")
@@ -1779,9 +1805,10 @@ class SignalHound(object):
 
 	def abort(self):
 		'''
-		BB_API bbStatus bbAbort(int device);
 
 		Stops the device operation and places the device into an idle state.
+
+		Raw Call: ``BB_API bbStatus bbAbort(int device);``
 		'''
 
 		# cleanup state variables used in various modes.
@@ -1804,7 +1831,6 @@ class SignalHound(object):
 
 	def preset(self):
 		'''
-		BB_API bbStatus bbPreset(int device);
 
 		This function exists to invoke a hard reset of the device. This will function similarly to a power
 		cycle(unplug/re-plug the device). This might be useful if the device has entered an undesirable or
@@ -1817,6 +1843,8 @@ class SignalHound(object):
 		after 2 seconds. Within this time you must call bbCloseDevice to free any remaining resources and
 		release the device serial number from the open device list. From the time of the bbPreset call, we
 		suggest 3 to more seconds of wait time before attempting to re-open the device.
+
+		Raw Call: ``BB_API bbStatus bbPreset(int device);``
 		'''
 
 		self.log.warning("Performing hardware-reset of device!")
@@ -1833,24 +1861,28 @@ class SignalHound(object):
 
 	def selfCal(self):
 		'''
-		BB_API bbStatus bbSelfCal(int device);
 
 		This function causes the device to recalibrate itself to adjust for internal device temperature changes,
 		generating an amplitude correction array as a function of IF frequency. This function will explicitly call
 		bbAbort() to suspend all device operations before performing the calibration, and will return the device
 		in an idle state and configured as if it was just opened. The state of the device should not be assumed,
 		and should be fully reconfigured after a self-calibration.
+
 		Temperature changes of 2 degrees Celsius or more have been shown to measurably alter the
 		shape/amplitude of the IF. We suggest using bbQueryDiagnostics to monitor the device’s temperature
 		and perform self-calibrations when needed. Amplitude measurements are not guaranteed to be
 		accurate otherwise, and large temperature changes (10 ° C or more) may result in adding a dB or more of
 		error.
+
 		Because this is a streaming device, we have decided to leave the programmer in full control of when the
 		device in calibrated. The device is calibrated once upon opening the device through bbOpenDevice and is
 		the responsibility of the programmer after that.
+
 		Note:
 		After calling this function, the device returns to the default state. Currently the API does not retain state
 		prior to the calling of bbSelfCal(). Fully reconfiguring the device will be necessary.
+
+		Raw Call: ``BB_API bbStatus bbSelfCal(int device);``
 		'''
 
 		self.log.info("Performing self-calibration of device.")
@@ -1866,20 +1898,22 @@ class SignalHound(object):
 
 	def syncCPUtoGPS(self, comPort, baudRate):
 		'''
-		BB_API bbStatus bbSyncCPUtoGPS(int comPort, int baudRate);
-
-		comPort  Com port number for the NMEA data output from the GPS reciever.
-		baudRate  Baud Rate of the Com port
+		Args:
+			comPort (integer):  Com port number for the NMEA data output from the GPS reciever.
+			baudRate (integer):  Baud Rate of the Com port
 
 		The connection to the COM port is only established for the duration of this function. It is closed when
 		the function returns. Call this function once before using a GPS PPS signal to time-stamp RF data. The
 		synchronization will remain valid until the CPU clock drifts more than ¼ second, typically several hours,
 		and will re-synchronize continually while streaming data using a PPS trigger input.
+
 		This function calculates the offset between your CPU clock time and the GPS clock time to within a few
 		milliseconds, and stores this value for time-stamping RF data using the GPS PPS trigger. This function
 		ignores time zone, limiting the calculated offset to +/- 30 minutes. It was tested using an FTS 500 from
 		Connor Winfield at 38.4 kbaud. It uses the “$GPRMC” string, so you must set up your GPS to output this
 		string.
+
+		Raw Call: ``BB_API bbStatus bbSyncCPUtoGPS(int comPort, int baudRate);``
 		'''
 
 		self.log.warning("GPS Synchronization not yet verified.")
@@ -1903,12 +1937,18 @@ class SignalHound(object):
 
 	def getDeviceType(self):
 		'''
-		BB_API bbStatus bbGetDeviceType(int device, int *type);
+		Returns:
+			| Ascii string containing device type:
+			| - "No device"
+			| - "BB60A"
+			| - "BB60C"
+			| - "BB124"
 
 		This function may be called only after the device has been opened. If the device successfully opened,
 		type will contain the model type of the device pointed to by handle.
-		Possible values for type are BB_DEVICE_NONE, BB_DEVICE_BB60A, BB_DEVICE_BB124. These values can
-		be found in the bb_api header file
+
+
+		Raw Call: ``BB_API bbStatus bbGetDeviceType(int device, int *type);``
 		'''
 
 		self.log.info("Querying device for model information")
@@ -1945,10 +1985,13 @@ class SignalHound(object):
 
 	def getSerialNumber(self):
 		'''
-		BB_API bbStatus bbGetSerialNumber(int device, unsigned int *sid);
+
+		Returns: Device serial number as a integer.
 
 		This function may be called only after the device has been opened. The serial number returned should
 		match the number on the case.
+
+		Raw Call: ``BB_API bbStatus bbGetSerialNumber(int device, unsigned int *sid);``
 		'''
 
 
@@ -1973,9 +2016,11 @@ class SignalHound(object):
 
 	def getFirmwareVersion(self):
 		'''
-		BB_API bbStatus bbGetFirmwareVersion(int device, int *version);
+		Returns: Device firmware rev as a integer.
 
 		Use this function to determine which version of firmware is associated with the specified device.
+
+		Raw Call: ``BB_API bbStatus bbGetFirmwareVersion(int device, int *version);``
 		'''
 
 		self.log.info("Querying device for firmware version.")
@@ -2000,14 +2045,19 @@ class SignalHound(object):
 
 	def getAPIVersion(self):
 		'''
-		BB_API const char* bbGetAPIVersion();
+
+		Returns: Device API version as an ascii string.
 
 		The returned string is of the form
 		major.minor.revision
+
 		Ascii periods (“.”) separate positive integers. Major/Minor/Revision are
 		not gauranteed to be a single decimal digit. The string is null
 		terminated. An example string is below ..
-		[ ‘1’ | ‘.’ | ‘2’ | ‘.’ | ‘1’ | ‘1’ | ‘\0’ ] = “1.2.11”
+
+		``[ ‘1’ | ‘.’ | ‘2’ | ‘.’ | ‘1’ | ‘1’ | ‘\0’ ] = “1.2.11”``
+
+		Raw Call: ``BB_API const char* bbGetAPIVersion();``
 		'''
 
 
@@ -2021,13 +2071,18 @@ class SignalHound(object):
 
 	def getErrorString(self, errCode):
 		'''
-		BB_API const char* bbGetErrorString(bbStatus status);
+		Args:
+			errCode (integer): Error code value
+
+		Returns: Ascii string containing human-readable version of the error code.
 
 		Produce an ascii string representation of a given status code. Useful for debugging.
 		Probably not really needed, since I'm doing error decoding locally in each function.
 
 		This /should/ be of type bbStatus. bbStatus is an enum with hard-coded values, so I'm being lazy, and just using
 		an int. It works well enough.
+
+		Raw Call: ``BB_API const char* bbGetErrorString(bbStatus status);``
 		'''
 
 		serialNo = ct.c_int(errCode)
@@ -2038,6 +2093,12 @@ class SignalHound(object):
 		return ct.c_char_p(apiRevStr).value  # Dereference pointer, extract string, return it.
 
 	def getCurrentAcquisitionSettings(self):
+		'''
+		Return a dictionary containing the return values from ``queryTraceInfo()``, ``getDeviceDiagnostics()`` and the current ``acq_conf``
+
+		If there is no running acquisition, ``queryTraceInfo()`` will be defaulted to ``{}``
+
+		'''
 		try:
 			tmp = self.queryTraceInfo()
 		except IOError:
@@ -2047,10 +2108,29 @@ class SignalHound(object):
 		tmp.update(self.acq_conf)
 
 		return tmp
+
+
 	# staticmethod, because it's only usefull for dealing with the SignalHound stuff, and yet it should be accessible easily for stuff like callbacks where you don't have.
 	# easy access to the instantiated class pointer
 	@staticmethod
 	def decodeRawSweep(bufPtr, bufLen):
+		'''
+		Args:
+			bufPtr (pointer to buffer): Pointer to a C buffer containing a sweep dataset
+			buflen (integer buffer size): Size of the data in ``bufPtr``
+
+		Decode a C array into a numpy-array using buffer casts. Assumes the values in the buffer are of datatype ``np.short``
+
+		Assumed array size is ``sizeof(np.short) * buflen`` bytes, or effectively 2 * bufLen.
+
+		Returns:
+			Numpy array containing contents of buffer
+
+		Note: This function copies the data from the array, so it is valid even if the memory underlying the ``bufPtr`` is subsequently
+		deallocated. This is intended for handling contexts like the callback, where once the callback returns, the SignalHound memory
+		management may reuse or free the underlying buffer. Since the copied array will be managed by the python memory manager, it
+		is safe to preserve beyond the scope of a calling function.
+		'''
 		bufAdr = ct.addressof(bufPtr.contents)
 		arr = np.frombuffer(int_asbuffer(bufAdr, bufLen * np.short().nbytes), dtype=np.short)  # Map array memory as a numpy array.
 		arr = arr.copy()  # Then copy it, so our array won't get modified when the circular buffer overwrites itself.
@@ -2059,6 +2139,25 @@ class SignalHound(object):
 
 	@staticmethod
 	def fastDecodeArray(ctBuff, buffLen, dtype):
+		'''
+		Args:
+			bufPtr (pointer to buffer): Pointer to a C buffer containing a sweep dataset
+			buflen (integer buffer size): Size of the data in ``bufPtr``
+			dtype (numpy data-type): Datatype of values in array.
+
+		Decode a C array into a numpy-array using buffer casts.
+
+		Assumed array size is ``sizeof(dtype) * buflen`` bytes.
+
+		Returns:
+			Numpy array containing contents of buffer
+
+
+		Note: This function copies the data from the array, so it is valid even if the memory underlying the ``bufPtr`` is subsequently
+		deallocated. This is intended for handling contexts like the callback, where once the callback returns, the SignalHound memory
+		management may reuse or free the underlying buffer. Since the copied array will be managed by the python memory manager, it
+		is safe to preserve beyond the scope of a calling function.
+		'''
 		bufAdr = ct.addressof(ctBuff)
 		arr = np.frombuffer(int_asbuffer(bufAdr, buffLen * dtype().nbytes), dtype=dtype)  # Map array memory as a numpy array.
 		arr = arr.copy()  # Then copy it, so our array won't get modified when the circular buffer overwrites itself.
