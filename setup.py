@@ -7,7 +7,7 @@ setup(
 	name="PySignalHound",
 
 	# Version number (initial):
-	version="0.0.2",
+	version="0.0.3",
 
 	# Application author details:
 	author="Connor Wolf",
